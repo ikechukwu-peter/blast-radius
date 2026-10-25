@@ -52,10 +52,22 @@ export interface NodeConfig {
   circuitBreaker?: boolean;
 }
 
+/** Custom look for a component; its behaviour still comes from `kind`. */
+export interface NodeAppearance {
+  /** Shown instead of the kind's name, e.g. "Kafka" for a queue. */
+  typeLabel?: string;
+  /** Icon name from the UI's icon registry. */
+  icon?: string;
+  /** Accent colour (hex). */
+  color?: string;
+}
+
 export interface DesignNode {
   id: string;
   kind: NodeKind;
   label: string;
+  /** UI only. Ignored by the engine. */
+  appearance?: NodeAppearance;
   /** Missing fields fall back to KIND_DEFAULTS. */
   config?: Partial<NodeConfig>;
   /** UI only. Ignored by the engine. */
@@ -74,12 +86,43 @@ export interface DesignEdge {
   weight?: number;
   /** Network latency of the hop (default 1ms). */
   latencyMs?: number;
+  /**
+   * 'traffic' (default) carries simulated requests from source to target.
+   * 'annotation' is drawing only: the engine ignores it, so it may loop, point at a client,
+   * duplicate another link or connect to a note.
+   */
+  kind?: 'traffic' | 'annotation';
+  // ---- UI only; the engine ignores everything below ----
+  label?: string;
+  /** Which ends get an arrowhead. Requests still flow source -> target. */
+  arrows?: 'end' | 'start' | 'both' | 'none';
+  pathStyle?: 'smooth' | 'step' | 'straight';
+  /** Bend points in canvas coordinates, in order from source to target. */
+  points?: { x: number; y: number }[];
+  sourceHandle?: string;
+  targetHandle?: string;
+  dashed?: boolean;
+}
+
+/** Drawing-only shapes: notes and grouping zones. The engine never sees them. */
+export interface Annotation {
+  id: string;
+  type: 'text' | 'zone';
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+  text: string;
+  color?: string;
+  /** text only */
+  fontSize?: 'sm' | 'md' | 'lg';
 }
 
 export interface Design {
   version: 1;
   nodes: DesignNode[];
   edges: DesignEdge[];
+  /** UI only. Ignored by the engine. */
+  annotations?: Annotation[];
 }
 
 export type NodeStatus = 'healthy' | 'degraded' | 'down' | 'failing_over';

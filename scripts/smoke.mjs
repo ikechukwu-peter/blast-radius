@@ -111,6 +111,42 @@ try {
   const ai = await page.evaluate(() => document.body.innerText);
   check(/Download & start|Start analyst|isn't available here/.test(ai), 'editor: AI tab offers an explicit opt-in (or explains why it cannot run)');
 
+  // Drawing: a looping link becomes drawing-only; labels; library components; notes.
+  await page.keyboard.press('Escape');
+  const handle = async (node, side) => {
+    await page.hover(`.react-flow__node[data-id="${node}"]`);
+    const bb = await (await page.$(`.react-flow__node[data-id="${node}"] .react-flow__handle[data-handleid="${side}"]`)).boundingBox();
+    return { x: bb.x + bb.width / 2, y: bb.y + bb.height / 2 };
+  };
+  const from = await handle('db', 'b');
+  const to = await handle('api', 'b');
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y + 60, { steps: 6 });
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await wait(900);
+  const draft = () => page.evaluate(() => JSON.parse(localStorage.getItem('br:draft')).design);
+  const loop = (await draft()).edges.find((e) => e.source === 'db' && e.target === 'api');
+  check(loop?.kind === 'annotation', 'drawing: a link that would loop traffic is kept as drawing-only');
+  const mid = await page.evaluate((id) => {
+    const path = document.querySelector(`.react-flow__edge[data-id="${id}"] path.react-flow__edge-path`);
+    const q = path.getPointAtLength(path.getTotalLength() / 2);
+    const m = path.getScreenCTM();
+    return { x: q.x * m.a + m.e, y: q.y * m.d + m.f };
+  }, loop.id);
+  await page.mouse.click(mid.x, mid.y, { count: 2 });
+  await wait(300);
+  await page.keyboard.type('replication');
+  await page.keyboard.press('Enter');
+  await wait(900);
+  check((await draft()).edges.find((e) => e.id === loop.id)?.label === 'replication', 'drawing: double-click a link to label it');
+  check(await click('Event stream'), 'drawing: library components can be added');
+  check(await click('Text note'), 'drawing: notes can be added');
+  await wait(900);
+  const d = await draft();
+  check(d.nodes.some((n) => n.kind === 'queue' && n.appearance?.typeLabel === 'Event stream') && d.annotations?.length === 1, 'drawing: custom components keep their behaviour; notes are saved');
+
   // Challenge
   await page.goto(`${BASE}/challenges/slow-provider`, { waitUntil: 'networkidle0' });
   await page.select('select', 't:event-driven');

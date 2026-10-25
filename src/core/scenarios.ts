@@ -1,5 +1,6 @@
 import { estimateMonthlyCost } from './cost';
 import { Simulation } from './engine';
+import { simulatedDesign } from './graph';
 import type { ChaosAction, Design, Metrics, NodeKind, SimEvent } from './types';
 
 /**
@@ -106,7 +107,8 @@ export const SCENARIOS: Scenario[] = [
 ];
 
 /** Turns a kind-based scenario action into concrete engine actions for this design. */
-export function resolveScenarioAction(design: Design, action: ScenarioAction): ChaosAction[] {
+export function resolveScenarioAction(input: Design, action: ScenarioAction): ChaosAction[] {
+  const design = simulatedDesign(input);
   const kindOf = new Map(design.nodes.map((n) => [n.id, n.kind]));
   switch (action.type) {
     case 'traffic':
@@ -163,7 +165,8 @@ export function missingKinds(design: Design, scenario: Scenario): NodeKind[] {
   return scenario.requiredKinds.filter((k) => !design.nodes.some((n) => n.kind === k));
 }
 
-export function runScenario(design: Design, scenario: Scenario, seed = 1337): ScenarioResult {
+export function runScenario(input: Design, scenario: Scenario, seed = 1337): ScenarioResult {
+  const design = simulatedDesign(input);
   const missing = missingKinds(design, scenario);
   const sim = new Simulation(design, { seed, samplesPerTick: 120 });
   const dt = 0.1;

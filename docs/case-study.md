@@ -55,7 +55,7 @@ Every system design conversation ends at a whiteboard diagram, and diagrams don'
 | Diagram | Archify | Interactive, validated architecture diagram from a JSON source |
 | Hosting | Vercel, custom subdomain | Static build, security headers, preview deploys |
 
-## 4. Eight decisions worth defending
+## 4. Nine decisions worth defending
 
 Each one has its own record in [decisions/](decisions/README.md).
 
@@ -67,6 +67,7 @@ Each one has its own record in [decisions/](decisions/README.md).
 6. **AI on the visitor's GPU, fed facts** ([006](decisions/006-on-device-ai.md)). Free and private, and grounded so a small model explains rather than invents.
 7. **Authorization in the database** ([007](decisions/007-supabase-rls.md)). Policies next to the data, then attacked from a real session.
 8. **SVG particles, bucketed** ([008](decisions/008-svg-particles.md)). Smooth motion at a 10 Hz data rate without a second renderer.
+9. **Never refuse a line** ([009](decisions/009-drawing-only-links.md)). Links the simulator can't run become drawing-only, so it draws like a diagram tool and still simulates correctly.
 
 ## 5. Measurements, not assumptions
 
@@ -74,8 +75,8 @@ From the test suite ([tests/](../tests/)) and the live project:
 
 | | Result |
 |---|---|
-| Unit tests | 52, in about 3.5 s; 91% line coverage of the engine, AI fact sheet and design store |
-| Browser smoke test | 17 checks on the production build, under the production CSP |
+| Unit tests | 71, in about 4 s; 91% line coverage of the engine, link geometry, AI fact sheet and design store |
+| Browser smoke test | 22 checks on the production build, under the production CSP, including drawing |
 | Determinism | Identical scores across runs, and between Node and Deno, for all 3 templates × 5 scenarios |
 | Winnability | A reference design survives all 5 scenarios within budget; 40 fixed replicas fails *Black Friday* on cost |
 | Leaderboard integrity | Forged score insert refused by Postgres; server score equals client score (1000 = 1000) |
@@ -103,13 +104,15 @@ What the engine reproduces, each as a test:
 - **Tests that couldn't fail.** *Found by breaking the engine on purpose.* The suite passed 52 of 52 on its first run. Making a dead cache fail every request instead of passing it through still passed: the test checked database load, not success. *Fix:* assert the error rate too, and re-break to confirm it now fails.
 - **Charts that hid the goal.** *Found by looking at a screenshot.* The results chart auto-scaled to the data, so on a good run the SLO lines sat off the top and the chart said nothing. Axis labels were clipped to "40ms" instead of "340ms". *Fix:* the y-domain always includes the goal, and the axis width fits the labels.
 - **An AI that read the facts and still got it backwards.** *Found by running the real model.* With traffic at 10x, the analyst said the single API replica was "underutilized"; it was at 600%. The fact sheet had the number, but on a page of facts a 1.5B model didn't pick it out, and the sheet never said traffic was 10x. *Fix:* the engine writes a headline first (the main bottleneck with its utilization and dropped rps, what's down, and the active chaos), and the prompt says to start from it. The next answer named the overloaded API and recommended replicas and autoscaling. It still occasionally misquotes a figure, which is why the panel says the simulator's numbers are the source of truth.
+- **A double-click that never reached the link.** *Found by a browser test, then by tracing events.* Once a link was selected, its "add a bend" handle sat exactly at the midpoint, so the second click of a double-click landed on the handle and added a bend instead of opening the label editor. *Fix:* a "+" only becomes a bend after a 4px drag, and double-clicking it edits the label, as in draw.io. Tracing the events also showed the test tool's double-click had never fired a real `dblclick` at all, so the test was fixed too.
+- **Selection that outlived undo.** *Found by the same walkthrough.* Duplicating everything and then undoing left "13 items selected", all of them gone. *Fix:* undo and redo prune the selection to ids that still exist, with a test.
 - **Effects that set state.** *Found by the React Hooks v7 lint rules.* Nine effects synchronously set state, causing extra renders and, in the canvas, two copies of the node list that could disagree. *Fix:* derive in render, key fetched data by what it was fetched for, and make the design store the canvas's only source of truth.
 - **A Vercel CLI step rewrote `.env.local`** while linking the project, in the file that held the database password. *Found by checking the file straight after.* The password was intact; the lesson was to check, not assume.
 
 ## 7. What is deliberately not built
 
 - **Real-time collaboration.** Multiplayer editing is a different product; sharing and forking cover the "look at my design" case.
-- **Custom component types.** Nine kinds with known behaviour keep the reviewer's rules and the scenarios meaningful.
+- **New behaviours.** You can make any component you like, but it borrows one of nine known behaviours. That keeps the reviewer's rules and the scenarios meaningful.
 - **A hosted AI model.** It would answer better, at the cost of a key, a bill and a privacy policy ([006](decisions/006-on-device-ai.md)).
 - **Calibration to a real cloud.** The goal is the shape of failures (saturation, cascades, stampedes), not a price calculator.
 

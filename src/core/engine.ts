@@ -1,5 +1,5 @@
 import { isSplitKind, resolveConfig } from './defaults';
-import { outgoingMap, topologicalOrder } from './graph';
+import { outgoingMap, simulatedDesign, topologicalOrder } from './graph';
 import type {
   ChaosAction,
   Design,
@@ -101,7 +101,8 @@ export class Simulation {
   private trafficMultiplier = 1;
   private t = 0;
 
-  constructor(design: Design, options: SimulationOptions = {}) {
+  constructor(input: Design, options: SimulationOptions = {}) {
+    const design = simulatedDesign(input);
     const order = topologicalOrder(design);
     if (!order) throw new Error('Design has a cycle. Run validateDesign() first.');
     this.order = order;

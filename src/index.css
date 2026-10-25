@@ -123,6 +123,26 @@ h3 {
   background: var(--ok);
   border-color: var(--ok);
 }
+/* draw.io-style: connection points show on hover, selection, or while a link is being drawn. */
+.react-flow .br-handle {
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.react-flow__node:hover .br-handle,
+.react-flow__node.selected .br-handle,
+.react-flow .br-handle.connectingto,
+.react-flow .br-handle.connectingfrom,
+.react-flow.br-connecting .br-handle {
+  opacity: 1;
+}
+.react-flow .br-handle.valid {
+  background: var(--good);
+  border-color: var(--good);
+}
+.react-flow__edgeupdater {
+  cursor: move;
+}
+
 .react-flow__edge.selected .br-edge-base {
   stroke: var(--ok) !important;
   stroke-opacity: 0.8 !important;

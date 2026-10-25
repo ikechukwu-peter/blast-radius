@@ -7,6 +7,19 @@ export interface ValidationIssue {
   edgeIds: string[];
 }
 
+/**
+ * The part of a design the engine simulates: components and traffic links only.
+ * Drawing-only links and annotations are dropped, so a drawing can loop or point anywhere
+ * without affecting validation, scores or the server's re-run.
+ */
+export function simulatedDesign(design: Design): Design {
+  return {
+    version: 1,
+    nodes: design.nodes,
+    edges: design.edges.filter((e) => (e.kind ?? 'traffic') === 'traffic'),
+  };
+}
+
 export function outgoingMap(design: Design): Map<string, DesignEdge[]> {
   const out = new Map<string, DesignEdge[]>();
   for (const n of design.nodes) out.set(n.id, []);
@@ -73,7 +86,8 @@ export function reachableFromClients(design: Design): Set<string> {
   return seen;
 }
 
-export function validateDesign(design: Design): ValidationIssue[] {
+export function validateDesign(input: Design): ValidationIssue[] {
+  const design = simulatedDesign(input);
   const issues: ValidationIssue[] = [];
   const ids = new Set<string>();
   for (const n of design.nodes) {
@@ -110,4 +124,32 @@ export function validateDesign(design: Design): ValidationIssue[] {
     });
   }
   return issues;
+}
+
+/**
+ * Why a new traffic link from `source` to `target` would break the simulation, or null if it
+ * is fine. The editor uses this to keep such links as drawing-only instead of refusing them.
+ */
+export function trafficLinkProblem(design: Design, source: string, target: string): string | null {
+  const byId = new Map(design.nodes.map((n) => [n.id, n]));
+  const s = byId.get(source);
+  const t = byId.get(target);
+  if (!s || !t) return 'Only components carry traffic; links to notes and zones are drawing-only.';
+  if (source === target) return 'A component cannot send traffic to itself.';
+  if (t.kind === 'client') return 'Clients only send traffic, so a link into them is drawing-only.';
+  const traffic = simulatedDesign(design).edges;
+  if (traffic.some((e) => e.source === source && e.target === target)) return 'These two are already linked by traffic.';
+  // Would target reach source through existing traffic? Then this link closes a loop.
+  const out = new Map<string, string[]>();
+  for (const e of traffic) out.set(e.source, [...(out.get(e.source) ?? []), e.target]);
+  const stack = [target];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === source) return 'Traffic cannot loop back, so this link is drawing-only.';
+    if (seen.has(id)) continue;
+    seen.add(id);
+    stack.push(...(out.get(id) ?? []));
+  }
+  return null;
 }

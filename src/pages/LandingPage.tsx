@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Activity, ArrowRight, Flame, ShieldCheck } from 'lucide-react';
+import { Activity, ArrowRight, Bot, Flame, ShieldCheck } from 'lucide-react';
 import { SCENARIOS } from '@/core';
 import { LiveDemo } from '@/components/LiveDemo';
 import { ScenarioCard } from '@/components/ScenarioCard';
@@ -19,6 +19,11 @@ const FEATURES = [
     icon: ShieldCheck,
     title: 'Prove',
     body: 'Five scripted incidents with SLOs and a budget. Deterministic scoring, verified on the server, so the leaderboard means something.',
+  },
+  {
+    icon: Bot,
+    title: 'Explain',
+    body: 'Ask why it failed. An open model runs on your own GPU, reads the simulator’s numbers and suggests the fix. No API key, and your design never leaves the browser.',
   },
 ];
 
@@ -47,7 +52,7 @@ export default function LandingPage() {
       </section>
 
       <section className="border-y border-line bg-panel/40">
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 md:grid-cols-3">
+        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 sm:grid-cols-2 lg:grid-cols-4">
           {FEATURES.map((f) => (
             <div key={f.title}>
               <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-line bg-bg text-ok">
@@ -64,7 +69,7 @@ export default function LandingPage() {
         <h2 className="font-display text-3xl font-semibold tracking-tight">How it works</h2>
         <ol className="mt-8 grid gap-6 md:grid-cols-3">
           {[
-            ['Design', 'Start from a template or a blank canvas. Set replicas, capacity, cache hit rates, failover times and retries.'],
+            ['Design', 'Start from a template or a blank canvas, or make your own components. Label links, bend them, add notes and zones, like any diagram tool.'],
             ['Run', 'Requests flow as particles. Every node shows utilization and latency; the review grades your design A to F.'],
             ['Break & prove', 'Inject failures by hand, or run a scripted challenge and submit a verified score.'],
           ].map(([title, body], i) => (
@@ -93,7 +98,7 @@ export default function LandingPage() {
 
       <footer className="border-t border-line">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-sm text-muted">
-          <span>No AI. Deterministic simulation. Open source.</span>
+          <span>Deterministic simulation. On-device AI, no API key. Open source.</span>
           <span>Blast Radius</span>
         </div>
       </footer>

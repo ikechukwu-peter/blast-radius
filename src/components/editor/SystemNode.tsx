@@ -3,6 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { Skull } from 'lucide-react';
 import { KIND_LABELS, resolveConfig, type DesignNode } from '@/core';
 import { fmtMs, fmtRps } from '@/lib/format';
+import { ICONS } from '@/lib/icons';
 import { COLORS, KIND_ICONS } from '@/lib/kinds';
 import { useLive } from '@/stores/simStore';
 
@@ -20,6 +21,21 @@ function utilColor(u: number) {
   return COLORS.ok;
 }
 
+/**
+ * A connection point on every side. With ConnectionMode.Loose any of them can start or end a
+ * link, like draw.io; they appear on hover.
+ */
+export function SideHandles() {
+  return (
+    <>
+      <Handle id="t" type="source" position={Position.Top} className="br-handle" />
+      <Handle id="r" type="source" position={Position.Right} className="br-handle" />
+      <Handle id="b" type="source" position={Position.Bottom} className="br-handle" />
+      <Handle id="l" type="source" position={Position.Left} className="br-handle" />
+    </>
+  );
+}
+
 function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
   const { node, invalid, finding, flashAt } = data;
   const cfg = useMemo(() => resolveConfig(node), [node]);
@@ -27,7 +43,9 @@ function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
   const rt = useLive((s) => s.tick?.nodes[id]);
   const pulse = useLive((s) => s.pulses[id]);
   const ref = useRef<HTMLDivElement>(null);
-  const Icon = KIND_ICONS[node.kind];
+  const Icon = (node.appearance?.icon && ICONS[node.appearance.icon]) || KIND_ICONS[node.kind];
+  const accent = node.appearance?.color ?? COLORS.ok;
+  const typeName = node.appearance?.typeLabel ?? KIND_LABELS[node.kind];
 
   useEffect(() => {
     if (!pulse || !ref.current) return;
@@ -68,8 +86,7 @@ function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
       style={{ borderColor, boxShadow: glow, opacity: status === 'down' ? 0.55 : 1 }}
       aria-label={`${node.label} (${KIND_LABELS[node.kind]})${live ? `, ${status}` : ''}`}
     >
-      {node.kind !== 'client' && <Handle type="target" position={Position.Left} />}
-      <Handle type="source" position={Position.Right} />
+      <SideHandles />
 
       {finding && !live && (
         <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-bad ring-2 ring-bg" title={finding} />
@@ -78,13 +95,18 @@ function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
       <div className="flex items-center gap-2">
         <div
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-bg"
-          style={{ color: status === 'down' ? COLORS.bad : COLORS.ok }}
+          style={{ color: status === 'down' ? COLORS.bad : accent }}
         >
           {status === 'down' ? <Skull size={15} /> : <Icon size={15} />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold leading-tight text-text">{node.label}</div>
-          <div className="truncate text-[10px] uppercase tracking-wide text-muted">{KIND_LABELS[node.kind]}</div>
+          <div
+            className="truncate text-[10px] uppercase tracking-wide text-muted"
+            title={node.appearance?.typeLabel ? `${typeName}: behaves like ${KIND_LABELS[node.kind]}` : undefined}
+          >
+            {typeName}
+          </div>
         </div>
         {showReplicas && (
           <div className="flex flex-col items-end">

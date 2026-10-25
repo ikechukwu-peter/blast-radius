@@ -1,7 +1,7 @@
 import { estimateMonthlyCost } from './cost.ts';
 import { isSplitKind, resolveConfig } from './defaults.ts';
 import { Simulation } from './engine.ts';
-import { outgoingMap, reachableFromClients, validateDesign } from './graph.ts';
+import { outgoingMap, reachableFromClients, simulatedDesign, validateDesign } from './graph.ts';
 import type { Design, DesignNode, Metrics } from './types.ts';
 
 /**
@@ -34,7 +34,8 @@ export interface Review {
 const PENALTY: Record<Severity, number> = { critical: 25, high: 12, medium: 6, low: 2, info: 0 };
 const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low', 'info'];
 
-export function reviewDesign(design: Design): Review {
+export function reviewDesign(input: Design): Review {
+  const design = simulatedDesign(input);
   const findings: Finding[] = [];
   const monthlyCostUsd = estimateMonthlyCost(design).totalUsd;
 

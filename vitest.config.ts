@@ -6,6 +6,6 @@ export default defineConfig({
   test: {
     include: ['tests/**/*.test.ts'],
     environment: 'node',
-    coverage: { provider: 'v8', include: ['src/core/**', 'src/ai/context.ts', 'src/stores/designStore.ts'], reporter: ['text-summary', 'html'] },
+    coverage: { provider: 'v8', include: ['src/core/**', 'src/ai/context.ts', 'src/stores/designStore.ts', 'src/lib/edgePath.ts'], reporter: ['text-summary', 'html'] },
   },
 });

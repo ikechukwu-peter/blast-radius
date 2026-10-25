@@ -102,7 +102,8 @@ export function buildAnalysisContext(input: AnalysisInput): string {
   lines.push('## Components');
   for (const n of design.nodes) {
     const c = resolveConfig(n);
-    const parts = [`${n.label} (${KIND_LABELS[n.kind]})`];
+    const typeName = n.appearance?.typeLabel ? `${n.appearance.typeLabel}, behaves like ${KIND_LABELS[n.kind]}` : KIND_LABELS[n.kind];
+    const parts = [`${n.label} (${typeName})`];
     if (n.kind === 'client') {
       parts.push(`${c.rps} rps ${c.trafficPattern}`, `retries ${c.retries}`, `timeout ${c.timeoutMs}ms`);
     } else {
@@ -119,11 +120,11 @@ export function buildAnalysisContext(input: AnalysisInput): string {
 
   lines.push('## Connections');
   const kindOf = new Map(design.nodes.map((n) => [n.id, n.kind]));
-  for (const e of design.edges) {
+  for (const e of design.edges.filter((x) => (x.kind ?? 'traffic') === 'traffic')) {
     const split = isSplitKind(kindOf.get(e.source) ?? 'api_server');
     const w = e.weight ?? 1;
     const how = split ? (w !== 1 ? `split weight ${w}` : 'split') : w < 1 ? `${Math.round(w * 100)}% of requests` : 'every request';
-    lines.push(`- ${label.get(e.source)} -> ${label.get(e.target)} (${how})`);
+    lines.push(`- ${label.get(e.source)} -> ${label.get(e.target)} (${how})${e.label ? ` "${e.label}"` : ''}`);
   }
   lines.push(`Monthly cost: $${estimateMonthlyCost(design).totalUsd}`);
 

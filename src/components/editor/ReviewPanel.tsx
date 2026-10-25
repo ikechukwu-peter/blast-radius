@@ -49,7 +49,7 @@ export function ReviewPanel({ review, onFindingClick, onStart }: { review: Revie
           )}
         </div>
       </div>
-      <p className="text-[11px] text-muted/80">Deterministic review: graph analysis plus a 30s headless simulation. No AI.</p>
+      <p className="text-[11px] text-muted/80">Graded by rules, not AI: graph analysis plus a 30-second headless simulation, so the same design always gets the same grade. The AI tab explains results; it never grades them.</p>
 
       {review.findings.length === 0 ? (
         <div className="rounded-lg border border-good/30 bg-good/5 p-4 text-center">

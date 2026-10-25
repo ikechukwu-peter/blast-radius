@@ -1,6 +1,6 @@
 # Blast Radius
 
-An architecture diagram that runs. Drag in load balancers, API servers, caches, databases, queues and third-party APIs, press Play, and requests flow through the design as particles, with live p50/p95/p99 and error rate. Then break it: kill the database primary, partition the network, add 4 seconds to a payment provider, send 10x traffic, and watch what survives. A rule-based reviewer grades the design A to F, five scripted incidents score it out of 1000 against SLOs and a budget, and an optional AI analyst, running on your own GPU, explains what went wrong.
+An architecture diagram that runs. Draw your system like you would in draw.io (your own components, labelled links, bends, notes and zones), press Play, and requests flow through the design as particles, with live p50/p95/p99 and error rate. Then break it: kill the database primary, partition the network, add 4 seconds to a payment provider, send 10x traffic, and watch what survives. A rule-based reviewer grades the design A to F, five scripted incidents score it out of 1000 against SLOs and a budget, and an optional AI analyst, running on your own GPU, explains what went wrong.
 
 **Try it: [blastradius.ikechukwupeter.com](https://blastradius.ikechukwupeter.com)**. No sign-up needed to design, simulate or take a challenge. Desktop Chrome, Edge or Arc is best; the AI analyst needs WebGPU.
 
@@ -19,6 +19,9 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 - **Simulates, not animates.** Every 100 ms the engine pushes request rates through the graph in topological order. Each component serves up to its capacity and drops the rest, and latency climbs along an M/M/1 curve as utilization rises. Then about 200 synthetic requests walk the graph to measure real percentiles and timeouts. See [engine.ts L302](src/core/engine.ts#L302) and [L504](src/core/engine.ts#L504).
 - **Is deterministic.** The random source is seeded, so a design and a scenario always produce the same numbers, in the browser and on the server. See [engine.ts L48](src/core/engine.ts#L48).
 - **Models the failures engineers argue about.** Database failover with a configurable promotion time, autoscaling that takes warm-up seconds to help, circuit breakers that fail fast, client retries that multiply load into a storm, a dead cache passing every request to the database, and a queue that absorbs a slow provider until it fills. Each behaviour is pinned by a test in [engine.test.ts](tests/engine.test.ts).
+- **Draws like a diagram tool.** Link from any side of a component, drag a link's end to reconnect it, drag the + on a link to bend it, and choose curved, right-angled or straight lines with arrowheads at either end, both or none. Double-click a link to label it. Add text notes and resizable zones (a VPC, a region, a team), select several with Shift, and copy, paste and duplicate with ⌘C, ⌘V and ⌘D, all with undo. See [TrafficEdge.tsx](src/components/editor/TrafficEdge.tsx) and [edgePath.ts](src/lib/edgePath.ts).
+- **Lets you make your own components.** Name one (Kafka, Stripe, an LLM API), pick an icon and colour, and choose which built-in kind it **behaves like**, so the simulator knows how to run it. A starter library ships with event streams, object storage, search, auth, payments, email, an LLM API and an API gateway. See [libraryStore.ts](src/stores/libraryStore.ts).
+- **Never lets a drawing break the simulation.** Requests need a direction and can't loop, so a link that would loop, point into the clients or duplicate another becomes a dashed **drawing-only** link with a one-line reason, instead of being refused. The engine ignores drawing-only links, notes and zones everywhere, including the server re-run. See [graph.ts](src/core/graph.ts) and [decision 009](docs/decisions/009-drawing-only-links.md).
 - **Lets you break things by hand.** Right-click a component to kill an instance, cause a full outage or degrade it; right-click a connection to add latency or partition it; set traffic from 0.5x to 10x. Every action lands in an incident log, and a list of active chaos lets you undo each one.
 - **Shows traffic as it really moves.** Particle density follows request rate, speed follows latency, and colour turns red where requests fail. Particles freeze when the simulation is paused. See [TrafficEdge.tsx L58-L60](src/components/editor/TrafficEdge.tsx#L58-L60).
 - **Reviews the design without guessing.** Graph analysis finds single points of failure, respecting the difference between load-balanced and fan-out calls. A 30-second headless run finds bottlenecks and idle spend. Other rules catch retries without a breaker, missing caches, synchronous third parties and queues with no consumer. Same design, same grade, every time. See [rules.ts](src/core/rules.ts).
@@ -32,8 +35,8 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 ```sh
 npm install
 npm run dev          # http://localhost:8080
-npm test             # 52 unit tests: engine behaviours, reviewer, scenarios, AI fact sheet, store, edge-copy drift
-npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP (17 checks)
+npm test             # 71 unit tests: engine, reviewer, scenarios, drawing rules, link geometry, AI fact sheet, store, edge-copy drift
+npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP (22 checks)
 npm run check        # lint + types + tests + build + smoke, the same as CI
 ```
 
@@ -80,7 +83,8 @@ docs/architecture.html  interactive architecture diagram
 | Editor + engine | Your design, every simulated request | Nothing. The simulation runs in the tab. A signed-out draft is saved to `localStorage`. |
 | AI analyst | A fact sheet about your design and run | Nothing. The model runs on your GPU. Starting it downloads the weights from Hugging Face and its compiled kernel from GitHub once, then they come from the browser cache. |
 | Supabase (signed in) | The designs you save, your email or GitHub profile | Designs you save, and scores you submit. Row-level security keeps private designs private; public ones are visible to anyone with the link. |
-| `submit-run` | The design you submit and your user id | It writes one leaderboard row. |
+| `submit-run` | The design you submit and your user id | It writes one leaderboard row. Drawing-only parts are ignored. |
+| Your component library | Components you create | Nothing. It's saved in this browser's `localStorage`; the components inside a saved design travel with the design. |
 | Vercel | Ordinary request details (IP, user agent) when files are downloaded | Not applicable. It never receives designs or chats. |
 
 The [Content-Security-Policy](vercel.json) limits connections to the app's own origin, Supabase, Google Fonts and the two model hosts. The smoke test records every request the app makes and fails on any other host. The CSP is served in `vite preview` too, so the test runs under the real policy.
@@ -94,6 +98,8 @@ The [Content-Security-Policy](vercel.json) limits connections to the app's own o
 **A small local model needs the answer's skeleton handed to it.** With a full fact sheet, Qwen 2.5 1.5B still called an API at 600% utilization "underutilized" and gave generic advice. The fix was to let the engine diagnose: the fact sheet now opens with a computed headline ("API is OVERLOADED at 600% of capacity (1 replica), dropping 5,000 rps"). The model then named the right bottleneck and the right fix, replicas and autoscaling, though it can still misquote a number. The fact sheet is capped at 5,000 characters to fit a 4k-token window alongside the prompt, two prior turns and the answer.
 
 **A passing test suite proved little until it was attacked.** The first run passed 52 of 52. Breaking the engine on purpose showed that one test checked database load but not whether requests still succeeded after the cache died. It does now.
+
+**A diagram tool can't refuse to draw.** The first version rejected links the simulator couldn't run (loops, links into clients, duplicates), which felt broken: you could see the line you wanted and the tool said no. Now they're kept as dashed drawing-only links with a reason, and the engine filters them out at its boundary. A test proves a design covered in loops, notes and zones scores exactly the same as the plain one.
 
 **"Paused" has to look paused.** SVG animations keep running on the browser's clock after React stops updating. The canvas now calls `pauseAnimations()`, and the smoke test checks particle positions while paused.
 
@@ -117,7 +123,8 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon ke
 - accounts (magic link, GitHub), save, share, fork
 - leaderboard verified on the server
 - on-device AI analyst with three model sizes
-- 52 unit tests plus a 17-check browser smoke test on every push (GitHub Actions)
+- draw.io-style editing: custom components, labels, bends, arrowheads, notes, zones, multi-select, copy/paste
+- 71 unit tests plus a 22-check browser smoke test on every push (GitHub Actions)
 
 **Measured:** in [tests/](tests/) and on the live project.
 - **Determinism:** identical scores across runs, and between Node and Deno, for every template and scenario.
@@ -128,7 +135,8 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon ke
 
 **Not built:**
 - **Real-time collaboration:** two people can't edit one design at once.
-- **Custom components:** the nine kinds are fixed, and so is their behaviour.
+- **New behaviours:** custom components borrow one of the nine built-in behaviours; you can't define a new one.
+- **Parent-child grouping:** zones are drawn behind components but don't carry them when moved; select both to move them together.
 - **Calibration against real systems:** the model reproduces the shape of failures, not a particular cloud's numbers.
 - **AI on phones:** WebGPU on mobile is uneven, so the analyst targets desktop.
 

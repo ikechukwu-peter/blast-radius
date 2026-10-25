@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
+  ArrowLeftRight,
+  BookmarkPlus,
+  Copy,
+  Minus,
+  Repeat,
+  Spline,
+  Type,
   ChevronDown,
   ChevronUp,
   HeartPulse,
@@ -30,7 +37,9 @@ import { ChaosMenu } from '@/components/sim/ChaosMenu';
 import { LiveStrip } from '@/components/sim/LiveStrip';
 import { Telemetry } from '@/components/sim/Telemetry';
 import { CostPanel } from './CostPanel';
-import { FlowCanvas } from './FlowCanvas';
+import { ComponentEditor } from './ComponentEditor';
+import { FlowCanvas, type SelectionChange } from './FlowCanvas';
+import { findComponent, type CustomComponent } from '@/stores/libraryStore';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AnalystPanel } from '@/ai/AnalystPanel';
@@ -57,6 +66,13 @@ const TOUR = [
 
 const SHORTCUTS: [string, string][] = [
   ['Space', 'Play / pause'],
+  ['⌘/Ctrl C · V', 'Copy and paste the selection'],
+  ['⌘/Ctrl D', 'Duplicate the selection'],
+  ['⌘/Ctrl A', 'Select everything'],
+  ['Shift drag', 'Box-select; Shift/⌘-click adds to the selection'],
+  ['Double-click a link', 'Edit its label'],
+  ['Drag a link end', 'Reconnect it to another component'],
+  ['Drag a link’s +', 'Add a bend; double-click a bend to remove it'],
   ['Esc', 'Stop and reset the simulation'],
   ['K', 'Kill an instance of the selected component'],
   ['O', 'Full outage of the selected component'],
@@ -86,7 +102,10 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
   const design = useDesign((s) => s.design);
   const structureVersion = useDesign((s) => s.structureVersion);
   const selectedNodeId = useDesign((s) => s.selectedNodeId);
-  const selectedEdgeId = useDesign((s) => s.selectedEdgeId);
+  const selectedNodeIds = useDesign((s) => s.selectedNodeIds);
+  const selectedEdgeIds = useDesign((s) => s.selectedEdgeIds);
+  const selection = useMemo(() => ({ nodes: selectedNodeIds, edges: selectedEdgeIds }), [selectedNodeIds, selectedEdgeIds]);
+  const [componentDraft, setComponentDraft] = useState<Partial<CustomComponent> | null>(null);
   const review = useDesign((s) => s.review);
   const flash = useDesign((s) => s.flash);
   const status = useSim(editorSim, (s) => s.status);
@@ -184,6 +203,21 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
         e.preventDefault();
         if (e.shiftKey) store().redo();
         else store().undo();
+      } else if (mod && !readOnly && ['c', 'v', 'd', 'a'].includes(e.key.toLowerCase())) {
+        const key = e.key.toLowerCase();
+        if (key === 'a') {
+          e.preventDefault();
+          store().selectAll();
+        } else if (editorSim.getState().status !== 'stopped' && key !== 'c') {
+          toast('Stop the simulation to edit.', 'info');
+        } else if (key === 'c') {
+          const n = store().copySelection();
+          if (n) toast(`Copied ${n} item${n > 1 ? 's' : ''}`, 'info', 1500);
+        } else {
+          e.preventDefault();
+          if (key === 'v') store().paste();
+          else store().duplicateSelection();
+        }
       } else if (mod && e.key.toLowerCase() === 's') {
         e.preventDefault();
         onSave?.();
@@ -199,11 +233,45 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
     return () => window.removeEventListener('keydown', onKey);
   }, [togglePlay, nodeAction, onSave, readOnly, selectedNodeId, store]);
 
-  const addKind = (kind: NodeKind, position?: { x: number; y: number }) => {
+  /** Palette items: a NodeKind, `lib:<id>` (a library component), `note` or `zone`. */
+  const addItem = (item: string, position?: { x: number; y: number }) => {
     if (!editable) return toast(readOnly ? 'Fork this design to edit it.' : 'Stop the simulation to edit.', 'info');
-    store().addNode(kind, position);
+    if (item === 'note') store().addAnnotation('text', position ?? { x: 0, y: -80 });
+    else if (item === 'zone') store().addAnnotation('zone', position);
+    else if (item.startsWith('lib:')) {
+      const c = findComponent(item.slice(4));
+      if (c) store().addFromLibrary(c, position);
+    } else store().addNode(item as NodeKind, position);
     setPaletteOpen(false);
     setTourStep((t) => (t === 0 ? 1 : t));
+  };
+
+  const connect = (source: string, target: string, handles: { sourceHandle?: string | null; targetHandle?: string | null }) => {
+    const result = store().connect(source, target, handles);
+    if (!result) return;
+    if (result.reason) toast(`${result.reason} It's dashed and the simulator ignores it.`, 'info', 4500);
+    else setTourStep((x) => (x === 1 ? 2 : x));
+  };
+
+  const applySelection = (nodes: SelectionChange[], edges: SelectionChange[]) => {
+    const s = store();
+    const n = new Set(s.selectedNodeIds);
+    const e = new Set(s.selectedEdgeIds);
+    for (const c of nodes) {
+      if (c.selected) n.add(c.id);
+      else n.delete(c.id);
+    }
+    for (const c of edges) {
+      if (c.selected) e.add(c.id);
+      else e.delete(c.id);
+    }
+    s.setSelection([...n], [...e]);
+  };
+
+  const guardEdit = (fn: () => void) => () => {
+    if (readOnly) return toast('Fork this design to edit it.', 'info');
+    if (running) return toast('Stop the simulation to edit.', 'info');
+    fn();
   };
 
   const onFinding = (f: Finding) => {
@@ -219,10 +287,28 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
     } else if (e.edgeId) store().select(null, e.edgeId);
   };
 
-  const menuItems: MenuItem[] = useMemo(() => {
+  const menuItems: MenuItem[] = (() => {
     if (!menu) return [];
+    const isComponent = menu.kind === 'node' && design.nodes.some((n) => n.id === menu.id);
+    const edge = menu.kind === 'edge' ? design.edges.find((x) => x.id === menu.id) : undefined;
+    const isTrafficEdge = !!edge && (edge.kind ?? 'traffic') === 'traffic';
+    if (menu.kind === 'node' && (!running || !isComponent)) {
+      const items: MenuItem[] = [
+        { label: 'Duplicate', icon: <Copy size={14} />, hint: '⌘D', onSelect: guardEdit(() => { store().select(menu.id); store().duplicateSelection(); }) },
+      ];
+      if (isComponent) {
+        const n = design.nodes.find((x) => x.id === menu.id)!;
+        items.push({
+          label: 'Save to library',
+          icon: <BookmarkPlus size={14} />,
+          onSelect: () =>
+            setComponentDraft({ name: n.appearance?.typeLabel ?? n.label, kind: n.kind, icon: n.appearance?.icon ?? '', color: n.appearance?.color ?? '#22d3ee', config: n.config, blurb: '' }),
+        });
+      }
+      items.push({ label: 'Delete', icon: <X size={14} />, hint: '⌫', tone: 'bad', onSelect: guardEdit(() => store().removeNodes([menu.id])) });
+      return items;
+    }
     if (menu.kind === 'node') {
-      if (!running) return [{ label: 'Delete', icon: <X size={14} />, tone: 'bad', onSelect: () => !readOnly && store().removeNodes([menu.id]) }];
       return [
         { label: 'Kill instance', icon: <Skull size={14} />, hint: 'K', tone: 'bad', onSelect: () => nodeAction('kill_instance', menu.id) },
         { label: 'Full outage', icon: <PowerOff size={14} />, hint: 'O', tone: 'bad', onSelect: () => nodeAction('outage', menu.id) },
@@ -230,7 +316,33 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
         { label: 'Recover', icon: <HeartPulse size={14} />, hint: 'R', tone: 'good', onSelect: () => nodeAction('recover', menu.id) },
       ];
     }
-    if (!running) return [{ label: 'Delete connection', icon: <X size={14} />, tone: 'bad', onSelect: () => !readOnly && store().removeEdges([menu.id]) }];
+    if (!running || !isTrafficEdge) {
+      if (!edge) return [];
+      const arrows = edge.arrows ?? 'end';
+      const nextArrows = { end: 'both', both: 'start', start: 'none', none: 'end' } as const;
+      return [
+        { label: edge.label ? 'Edit label' : 'Add label', icon: <Type size={14} />, hint: 'dbl-click', onSelect: guardEdit(() => store().setEditingEdge(edge.id)) },
+        { label: `Arrowheads: ${arrows} → ${nextArrows[arrows]}`, icon: <ArrowLeftRight size={14} />, onSelect: guardEdit(() => store().styleEdge(edge.id, { arrows: nextArrows[arrows] })) },
+        {
+          label: 'Reverse direction',
+          icon: <Repeat size={14} />,
+          onSelect: guardEdit(() => {
+            const reason = store().reverseEdge(edge.id);
+            if (reason) toast(`${reason} It's now drawing-only.`, 'info', 4000);
+          }),
+        },
+        {
+          label: isTrafficEdge ? 'Make drawing-only' : 'Make it carry traffic',
+          icon: <Spline size={14} />,
+          onSelect: guardEdit(() => {
+            const reason = store().setEdgeKind(edge.id, isTrafficEdge ? 'annotation' : 'traffic');
+            if (reason) toast(reason, 'warn', 4000);
+          }),
+        },
+        ...(edge.points?.length ? [{ label: 'Straighten (remove bends)', icon: <Minus size={14} />, onSelect: guardEdit(() => store().styleEdge(edge.id, { points: undefined })) }] : []),
+        { label: 'Delete link', icon: <X size={14} />, hint: '⌫', tone: 'bad' as const, onSelect: guardEdit(() => store().removeEdges([edge.id])) },
+      ];
+    }
     const apply = (a: Parameters<ReturnType<typeof editorSim.getState>['apply']>[0]) => editorSim.getState().apply(a);
     return [
       { label: '+500ms latency', icon: <Turtle size={14} />, tone: 'warn', onSelect: () => apply({ type: 'add_latency', edgeId: menu.id, ms: 500 }) },
@@ -238,14 +350,14 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
       { label: 'Partition', icon: <Scissors size={14} />, tone: 'bad', onSelect: () => apply({ type: 'partition', edgeId: menu.id }) },
       { label: 'Heal', icon: <Link2 size={14} />, tone: 'good', onSelect: () => apply({ type: 'heal', edgeId: menu.id }) },
     ];
-  }, [menu, running, readOnly, nodeAction, store]);
+  })();
 
   const menuTitle = menu
     ? menu.kind === 'node'
-      ? design.nodes.find((n) => n.id === menu.id)?.label
+      ? (design.nodes.find((n) => n.id === menu.id)?.label ?? (design.annotations?.find((a) => a.id === menu.id)?.type === 'zone' ? 'Zone' : 'Note'))
       : (() => {
           const e = design.edges.find((x) => x.id === menu.id);
-          const l = (id?: string) => design.nodes.find((n) => n.id === id)?.label;
+          const l = (id?: string) => design.nodes.find((n) => n.id === id)?.label ?? 'note';
           return e ? `${l(e.source)} → ${l(e.target)}` : undefined;
         })()
     : undefined;
@@ -329,7 +441,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
           {/* Palette */}
           {!readOnly && (
             <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-line bg-panel p-3 md:block">
-              <Palette onAdd={(k) => addKind(k)} />
+              <Palette onAdd={(k) => addItem(k)} onEditComponent={setComponentDraft} />
             </aside>
           )}
 
@@ -338,21 +450,24 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
             <FlowCanvas
               design={design}
               editable={editable}
-              selectedNodeId={selectedNodeId}
-              selectedEdgeId={selectedEdgeId}
+              selection={selection}
               invalidIds={invalidIds}
               findingByNode={findingByNode}
               flash={flash}
               fitKey={fitKey}
-              onSelect={(n, e) => store().select(n, e)}
+              onSelectionChanges={applySelection}
               onDragStart={() => store().snapshot()}
               onMove={(p) => store().moveNodes(p)}
               onRemoveNodes={(ids) => store().removeNodes(ids)}
               onRemoveEdges={(ids) => store().removeEdges(ids)}
-              onConnect={(s, t) => {
-                if (store().connect(s, t)) setTourStep((x) => (x === 1 ? 2 : x));
+              onConnect={connect}
+              onReconnect={(id, c) => {
+                if (!c.source || !c.target) return;
+                const r = store().reconnect(id, { source: c.source, target: c.target, sourceHandle: c.sourceHandle, targetHandle: c.targetHandle });
+                if (r?.reason) toast(`${r.reason} It's now drawing-only.`, 'info', 4000);
               }}
-              onDropKind={(k, pos) => addKind(k, pos)}
+              onEdgeDoubleClick={(id) => store().setEditingEdge(id)}
+              onDropItem={(item, pos) => addItem(item, pos)}
               onNodeMenu={(id, x, y) => {
                 store().select(id);
                 setMenu({ kind: 'node', id, x, y });
@@ -432,7 +547,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
           {paletteOpen && (
             <div className="absolute inset-0 z-30 flex items-end bg-black/40 md:hidden" onClick={() => setPaletteOpen(false)}>
               <div className="w-full rounded-t-xl border-t border-line bg-panel p-4" onClick={(e) => e.stopPropagation()}>
-                <Palette compact onAdd={(k) => addKind(k)} />
+                <Palette compact onAdd={(k) => addItem(k)} onEditComponent={setComponentDraft} />
               </div>
             </div>
           )}
@@ -480,6 +595,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
           )}
         </footer>
 
+        <ComponentEditor draft={componentDraft} onClose={() => setComponentDraft(null)} />
         {menu && <ContextMenu x={menu.x} y={menu.y} title={menuTitle} items={menuItems} onClose={() => setMenu(null)} />}
 
         <Modal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} title="Keyboard shortcuts">

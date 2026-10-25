@@ -22,4 +22,7 @@ export const fmtDate = (iso: string) =>
 
 export const uid = (prefix = '') => `${prefix}${Math.random().toString(36).slice(2, 8)}`;
 
+/** "a" or "an", by the sound of the first letter (good enough for component names). */
+export const article = (word: string) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
+
 export const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
