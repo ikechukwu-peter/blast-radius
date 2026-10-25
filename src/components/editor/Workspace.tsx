@@ -10,10 +10,10 @@ import {
   Play,
   Plus,
   PowerOff,
-  RotateCcw,
   Scissors,
   Skull,
   Snail,
+  Square,
   TrendingDown,
   Turtle,
   X,
@@ -48,6 +48,7 @@ const TOUR = [
 
 const SHORTCUTS: [string, string][] = [
   ['Space', 'Play / pause'],
+  ['Esc', 'Stop and reset the simulation'],
   ['K', 'Kill an instance of the selected component'],
   ['O', 'Full outage of the selected component'],
   ['D', 'Degrade the selected component'],
@@ -165,7 +166,9 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e)) return;
       const mod = e.metaKey || e.ctrlKey;
-      if (e.key === ' ') {
+      if (e.key === 'Escape' && editorSim.getState().status !== 'stopped') {
+        editorSim.getState().reset();
+      } else if (e.key === ' ') {
         e.preventDefault();
         togglePlay();
       } else if (mod && e.key.toLowerCase() === 'z' && !readOnly) {
@@ -351,6 +354,11 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
                 <ActiveChaosList store={editorSim} />
               </div>
             </div>
+            {status === 'paused' && (
+              <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-full border border-warn/50 bg-bg/90 px-3 py-1 text-xs font-semibold text-warn backdrop-blur">
+                PAUSED · Space to resume · Esc to stop
+              </div>
+            )}
 
             {design.nodes.length === 0 && (
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
@@ -418,8 +426,8 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
                 {status === 'running' ? <Pause size={14} /> : <Play size={14} />}
                 {status === 'running' ? 'Pause' : status === 'paused' ? 'Resume' : 'Play'}
               </button>
-              <button className="btn-icon" onClick={() => editorSim.getState().reset()} disabled={status === 'stopped'} aria-label="Reset simulation" title="Reset">
-                <RotateCcw size={14} />
+              <button className="btn" onClick={() => editorSim.getState().reset()} disabled={status === 'stopped'} aria-label="Stop simulation" title="Stop and reset (Esc)">
+                <Square size={12} fill="currentColor" /> Stop
               </button>
               <div className="flex overflow-hidden rounded-md border border-line" role="group" aria-label="Speed">
                 {[1, 2, 5].map((s) => (

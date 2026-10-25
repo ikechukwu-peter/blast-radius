@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -16,6 +16,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { isSplitKind, type Design, type NodeKind } from '@/core';
 import { COLORS } from '@/lib/kinds';
+import { useLive } from '@/stores/simStore';
 import { SystemNode, type SystemFlowNode } from './SystemNode';
 import { TrafficEdge, type TrafficFlowEdge } from './TrafficEdge';
 
@@ -65,6 +66,14 @@ function Inner(props: FlowCanvasProps) {
   } = props;
   const rf = useReactFlow();
   const [nodes, setNodes] = useState<SystemFlowNode[]>([]);
+  const wrapper = useRef<HTMLDivElement>(null);
+  const paused = useLive((s) => s.status === 'paused' || s.status === 'finished');
+
+  // Freeze the SVG particle animations while the simulation is paused, so the canvas
+  // never looks like it is still running.
+  useEffect(() => {
+    wrapper.current?.querySelectorAll('svg').forEach((svg) => (paused ? svg.pauseAnimations() : svg.unpauseAnimations()));
+  }, [paused, design]);
 
   // Sync design -> React Flow nodes, preserving React Flow's measured sizes.
   useEffect(() => {
@@ -162,6 +171,7 @@ function Inner(props: FlowCanvasProps) {
   );
 
   return (
+    <div ref={wrapper} className="h-full w-full">
     <ReactFlow<SystemFlowNode, TrafficFlowEdge>
       nodes={nodes}
       edges={edges}
@@ -219,6 +229,7 @@ function Inner(props: FlowCanvasProps) {
         />
       )}
     </ReactFlow>
+    </div>
   );
 }
 
