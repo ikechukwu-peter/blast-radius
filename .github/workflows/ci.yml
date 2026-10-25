@@ -32,7 +32,8 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check the leaderboard verifier
-        run: deno check supabase/functions/submit-run/index.ts
+        working-directory: supabase/functions # deno.json there: resolve npm: imports without node_modules
+        run: deno check submit-run/index.ts
 
   smoke:
     name: Browser smoke test

@@ -1,6 +1,7 @@
 // Browser smoke test: drives the production build in headless Chrome.
 //
 //   npm run build && npm run smoke            (CHROME=/path/to/chrome to override)
+//   BASE_URL=https://blastradius.ikechukwupeter.com npm run smoke   (against a deployed site)
 //
 // Asserts: every route renders without console errors; a design runs, pauses (particles
 // freeze), takes chaos and stops; a challenge produces a score; the AI tab offers a download
@@ -11,18 +12,18 @@ import { existsSync, readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 
 const PORT = 4321;
-const BASE = `http://localhost:${PORT}`;
+const BASE = process.env.BASE_URL?.replace(/\/$/, '') || `http://localhost:${PORT}`;
 const CHROME =
   process.env.CHROME ||
   ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync);
 // The build talks to Supabase only if one was configured at build time (.env.local or env).
 const envFile = existsSync('.env.local') ? readFileSync('.env.local', 'utf8') : '';
 const supabaseUrl = process.env.VITE_SUPABASE_URL || envFile.match(/^VITE_SUPABASE_URL=(.+)$/m)?.[1]?.trim();
-const ALLOWED_HOSTS = ['localhost', 'fonts.googleapis.com', 'fonts.gstatic.com', ...(supabaseUrl ? [new URL(supabaseUrl).hostname] : [])];
+const ALLOWED_HOSTS = [new URL(BASE).hostname, 'fonts.googleapis.com', 'fonts.gstatic.com', ...(supabaseUrl ? [new URL(supabaseUrl).hostname] : [])];
 
 if (!CHROME) throw new Error('Chrome not found. Set CHROME=/path/to/chrome');
 
-const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
+const server = process.env.BASE_URL ? null : spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 const failures = [];
 const check = (ok, msg) => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${msg}`);
@@ -130,7 +131,7 @@ try {
   check(offOrigin.size === 0, `no requests leave the origin${offOrigin.size ? `: ${[...offOrigin].join(', ')}` : ''}`);
   await browser.close();
 } finally {
-  server.kill();
+  server?.kill();
 }
 
 console.log(failures.length ? `\n${failures.length} FAILED` : '\nSmoke test passed');
