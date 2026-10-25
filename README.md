@@ -2,6 +2,8 @@
 
 **Your architecture diagram, but it runs.**
 
+**Live:** https://blast-radius-tau-pink.vercel.app
+
 Drag in load balancers, API servers, caches, databases, queues and third-party APIs. Press Play and requests flow through your design as particles, with live p50/p95/p99 and error rates. Then break things: kill the database primary, partition the network, add 4 seconds of latency to a provider, send 10x traffic. See what survives.
 
 - **Simulate:** a deterministic queueing simulation, not an animation. Utilization, saturation latency, autoscaling with warm-up, database failover, circuit breakers, retry amplification, queue backpressure, and a cache dying into a thundering herd.
