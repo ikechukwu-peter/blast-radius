@@ -1,99 +1,145 @@
 # Blast Radius
 
-**Your architecture diagram, but it runs.**
+An architecture diagram that runs. Drag in load balancers, API servers, caches, databases, queues and third-party APIs, press Play, and requests flow through the design as particles, with live p50/p95/p99 and error rate. Then break it: kill the database primary, partition the network, add 4 seconds to a payment provider, send 10x traffic, and watch what survives. A rule-based reviewer grades the design A to F, five scripted incidents score it out of 1000 against SLOs and a budget, and an optional AI analyst, running on your own GPU, explains what went wrong.
 
-**Live:** https://blastradius.ikechukwupeter.com
+**Try it: [blastradius.ikechukwupeter.com](https://blastradius.ikechukwupeter.com)**. No sign-up needed to design, simulate or take a challenge. Desktop Chrome, Edge or Arc is best; the AI analyst needs WebGPU.
 
-Drag in load balancers, API servers, caches, databases, queues and third-party APIs. Press Play and requests flow through your design as particles, with live p50/p95/p99 and error rates. Then break things: kill the database primary, partition the network, add 4 seconds of latency to a provider, send 10x traffic. See what survives.
+```text
+Design → seeded simulation (rates + sampled requests) → p99, errors, incidents → review / challenge score → on-device AI explains it
+```
 
-- **Simulate:** a deterministic queueing simulation, not an animation. Utilization, saturation latency, autoscaling with warm-up, database failover, circuit breakers, retry amplification, queue backpressure, and a cache dying into a thundering herd.
-- **Review:** a rule-based design reviewer (no AI) that grades the design A–F. It finds single points of failure from graph analysis and finds bottlenecks from a headless 30s simulation run.
-- **Prove:** five challenge scenarios with SLOs and a budget. Scores are verified server-side by re-running the same seeded simulation, so the leaderboard can't be faked.
+**[Read the case study](docs/case-study.md)** for the design, the trade-offs, and the bugs.
 
-## Run it
+[![Architecture](docs/architecture.png)](docs/architecture.html)
 
-```bash
+The diagram is interactive and self-contained: open [architecture.html](docs/architecture.html) in a browser to trace paths, search and export. Its source is [docs/diagrams/architecture.json](docs/diagrams/architecture.json), rendered with Archify.
+
+## What it does
+
+- **Simulates, not animates.** Every 100 ms the engine pushes request rates through the graph in topological order. Each component serves up to its capacity and drops the rest, and latency climbs along an M/M/1 curve as utilization rises. Then about 200 synthetic requests walk the graph to measure real percentiles and timeouts. See [engine.ts L302](src/core/engine.ts#L302) and [L504](src/core/engine.ts#L504).
+- **Is deterministic.** The random source is seeded, so a design and a scenario always produce the same numbers, in the browser and on the server. See [engine.ts L48](src/core/engine.ts#L48).
+- **Models the failures engineers argue about.** Database failover with a configurable promotion time, autoscaling that takes warm-up seconds to help, circuit breakers that fail fast, client retries that multiply load into a storm, a dead cache passing every request to the database, and a queue that absorbs a slow provider until it fills. Each behaviour is pinned by a test in [engine.test.ts](tests/engine.test.ts).
+- **Lets you break things by hand.** Right-click a component to kill an instance, cause a full outage or degrade it; right-click a connection to add latency or partition it; set traffic from 0.5x to 10x. Every action lands in an incident log, and a list of active chaos lets you undo each one.
+- **Shows traffic as it really moves.** Particle density follows request rate, speed follows latency, and colour turns red where requests fail. Particles freeze when the simulation is paused. See [TrafficEdge.tsx L58-L60](src/components/editor/TrafficEdge.tsx#L58-L60).
+- **Reviews the design without guessing.** Graph analysis finds single points of failure, respecting the difference between load-balanced and fan-out calls. A 30-second headless run finds bottlenecks and idle spend. Other rules catch retries without a breaker, missing caches, synchronous third parties and queues with no consumer. Same design, same grade, every time. See [rules.ts](src/core/rules.ts).
+- **Scores you against incidents.** *Black Friday*, *The Primary Is Gone*, *The Slow Provider*, *Cache Meltdown* and *Retry Storm* each script failures against your design. To survive, you have to stay within the latency and error SLOs for most of the run **and** under budget, so over-provisioning loses too. A reference design proves every scenario can be won. See [scenarios.ts L166](src/core/scenarios.ts#L166).
+- **Verifies the leaderboard on the server.** The browser can't write a score. A Supabase edge function reloads your design, re-runs the scenario with the same engine and stores the result, along with the exact design that earned it. See [submit-run](supabase/functions/submit-run/index.ts#L95).
+- **Explains results with an AI that runs on your GPU.** Open the **AI** tab, or ask after a challenge. A small open model (Qwen 2.5 1.5B by default) runs in the browser through WebLLM and WebGPU, with no API key and no server. It is given a fact sheet built from the engine's own output and told to use only those numbers. You can see exactly what it was shown. See [context.ts](src/ai/context.ts#L51) and [decision 006](docs/decisions/006-on-device-ai.md).
+- **Saves, shares and forks.** Sign in by email magic link or GitHub. Designs autosave; a public link lets anyone run and break your design, then fork it. Without an account, your draft is kept in the browser.
+
+## Run it locally
+
+```sh
 npm install
-npm run dev        # http://localhost:8080
-npm test           # engine tests + proof that every challenge is beatable
-npm run build      # typecheck + production build
+npm run dev          # http://localhost:8080
+npm test             # 52 unit tests: engine behaviours, reviewer, scenarios, AI fact sheet, store, edge-copy drift
+npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP (17 checks)
+npm run check        # lint + types + tests + build + smoke, the same as CI
 ```
 
-**The app works with no backend.** The editor, simulation, chaos, review, challenges and landing page all run in the browser, and your draft is saved in localStorage. Accounts, saving, sharing and the leaderboard light up once you connect Supabase.
+The app runs fully without a backend. Accounts, saving, sharing and the leaderboard appear when Supabase is configured:
 
-## Connect Supabase (accounts, save/share, leaderboard)
-
-1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
-2. **SQL Editor →** paste [`supabase/schema.sql`](supabase/schema.sql) **→ Run.** This creates the tables, Row Level Security policies, and the leaderboard view.
-3. Copy `.env.example` to `.env.local` and fill in the Project URL and the anon/publishable key (Settings → API).
-4. **Authentication → URL Configuration:** set the Site URL and add `http://localhost:8080/**` plus your production URL to Redirect URLs.
-5. Optional: Authentication → Providers → GitHub, for "Continue with GitHub".
-6. Deploy the anti-cheat leaderboard function:
-   ```bash
-   ./scripts/sync-core-to-edge.sh      # copies the engine for Deno; rerun after editing src/core
-   supabase login
-   supabase functions deploy submit-run --project-ref <your-project-ref>
-   ```
-
-## Deploy (Vercel)
-
-1. Push to GitHub, then on Vercel: **Add New → Project →** import the repo. The preset is Vite.
-2. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables.
-3. Deploy. `vercel.json` already rewrites routes like `/d/123` to the SPA.
-4. Add the Vercel URL to Supabase's Redirect URLs.
-
-## Project layout
-
-```
-src/
-  core/            Simulation engine, rule-based reviewer, scenarios, templates (pure TS, no React)
-  stores/          zustand: designStore (editing + undo), simStore (rAF loop, chaos), auth, toasts
-  components/
-    editor/        FlowCanvas, SystemNode, TrafficEdge (particles), panels, Workspace
-    sim/           Live metrics, telemetry charts, incident log, chaos menu
-  pages/           Landing, Editor (/play, /d/:id), Shared (/s/:slug), Challenges, Leaderboard, Me, Auth
-  lib/             Supabase client + API, formatting, PNG export
-supabase/
-  schema.sql       Tables, RLS, leaderboard view
-  functions/submit-run/   Edge function that re-runs scenarios server-side
-scripts/
-  smoke.ts         Engine behaviour tests
-  solutions.ts     A reference design that beats every scenario (spoilers)
-docs/SPEC.md       Product & UI spec
+```sh
+cp .env.example .env.local            # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+supabase db push                      # tables, RLS policies, leaderboard view (supabase/migrations)
+npm run sync:edge                     # copy src/core into the edge function (Deno needs .ts imports)
+supabase functions deploy submit-run
 ```
 
-| Route | What it is |
-|---|---|
-| `/` | Landing page with a live demo that breaks itself every 8s |
-| `/play` | Editor (local draft, template picker, 4-step tour) |
-| `/d/:id` | Your saved design (autosaves) |
-| `/s/:slug` | Public read-only view: run it, break it, fork it |
-| `/challenges`, `/challenges/:id` | Scenario list; a run at 4x speed with a scored results chart |
-| `/leaderboard` | Best verified score per engineer per scenario |
-| `/me` | Your designs |
+**Warnings:**
+- **After changing anything in `src/core/`, run `npm run sync:edge` and redeploy `submit-run`.** Otherwise server scores drift from what players see. CI fails when the copy is stale.
+- **The AI analyst needs WebGPU** and downloads about 1 GB the first time; the browser caches it after that. Headless Chrome on CI has no GPU, so the smoke test only checks the opt-in screen.
+- **Capacities and prices are illustrative defaults,** chosen so the trade-offs are visible, not benchmarks of real hardware.
 
-**Editor shortcuts:** `Space` play/pause · select a node, then `K` kill, `O` outage, `D` degrade, `R` recover · `⌘Z` / `⇧⌘Z` · `⌘S` save · `?` for the full list. Right-click nodes or edges while running for chaos.
+## How it fits together
 
-## How the simulation works
+```text
+src/core/             the engine: Simulation, reviewDesign, scenarios, templates, cost (pure TS, no DOM, tested)
+src/ai/               on-device analyst: WebLLM worker, model list, fact-sheet builder, chat panel
+src/stores/           zustand: design (edit + undo), simulation loop (rAF, chaos), auth, toasts
+src/components/       canvas (React Flow nodes + particle edges), panels, telemetry, skeletons
+src/pages/            landing, editor, shared view, challenges, leaderboard, my designs, sign-in
+supabase/schema.sql   tables, row-level security, leaderboard view (also in supabase/migrations/)
+supabase/functions/   submit-run: re-runs a scenario with a Deno copy of src/core and stores the score
+vercel.json           SPA rewrites, Content-Security-Policy and security headers
 
-Each 100ms tick runs two layers:
+tests/                engine, reviewer, scenarios, AI fact sheet, design store, edge-copy drift
+tests/fixtures/       a reference design that beats every scenario (spoilers)
+scripts/smoke.mjs     headless Chrome walkthrough + network allow-list check
+.github/workflows/    CI: lint, types, tests with coverage, Deno check, browser smoke; weekly too
 
-1. **Fluid model:** request rates flow through the DAG in topological order. Each node serves up to `capacityPerReplica × activeReplicas` and drops the rest. Latency follows an M/M/1-style curve `base / (1 − ρ)` capped at 20×. Load balancers split traffic across healthy targets; other nodes fan out to every dependency; caches forward only misses; queues buffer and drain at downstream worker capacity.
-2. **Sampling:** about 200 synthetic requests per tick walk the graph, using each node's failure probability and latency from layer 1. That produces real p50/p95/p99, end-to-end error rate and client timeouts. The smoothed client error rate feeds retry amplification (`1 + e + e² + …`) into the next tick, which is how retry storms emerge on their own.
+docs/case-study.md    the design, the trade-offs, the bugs
+docs/decisions/       why the non-obvious choices were made
+docs/architecture.html  interactive architecture diagram
+```
 
-Autoscaling is target-tracking with a 10s sustain window and warm-up. Circuit breakers trip at more than 50% downstream failure, or when calls would exceed the client timeout, and stay open for 10s. Everything is seeded (`mulberry32`), so a design and scenario always produce the same score in the browser and on the server.
+## What leaves the browser, and when
 
-## Showing it off
+| Component | What it sees | What it sends anywhere |
+|---|---|---|
+| Editor + engine | Your design, every simulated request | Nothing. The simulation runs in the tab. A signed-out draft is saved to `localStorage`. |
+| AI analyst | A fact sheet about your design and run | Nothing. The model runs on your GPU. Starting it downloads the weights from Hugging Face and its compiled kernel from GitHub once, then they come from the browser cache. |
+| Supabase (signed in) | The designs you save, your email or GitHub profile | Designs you save, and scores you submit. Row-level security keeps private designs private; public ones are visible to anyone with the link. |
+| `submit-run` | The design you submit and your user id | It writes one leaderboard row. |
+| Vercel | Ordinary request details (IP, user agent) when files are downloaded | Not applicable. It never receives designs or chats. |
 
-A 30-second screen recording:
-1. Load *The Weekend Project*, press Play, and show calm cyan particles.
-2. Chaos → Traffic 10x. Everything turns red and p99 explodes.
-3. Open Review: grade D, "Postgres is a single point of failure."
-4. Run *Black Friday* with a fixed design. It survives with a score of 1000.
-5. End on the leaderboard.
+The [Content-Security-Policy](vercel.json) limits connections to the app's own origin, Supabase, Google Fonts and the two model hosts. The smoke test records every request the app makes and fails on any other host. The CSP is served in `vite preview` too, so the test runs under the real policy.
 
-Caption: *"Think your architecture survives Black Friday? Prove it."*
+## Things worth knowing
 
-## Using your Lovable credits on this (optional)
+**Determinism is the feature everything else stands on.** A seeded engine makes the tests exact, the leaderboard verifiable and the AI's numbers checkable. Without it, the server and the player would disagree about every score.
 
-The app is complete without Lovable. If you still want to use the credits, the stack matches what Lovable generates (Vite, React, TypeScript, Tailwind, `@/` imports, port 8080). Create a Lovable project, connect it to GitHub, replace that repo's contents with this code and push. Lovable then picks up the code. Use it for UI polish, and tell it never to edit `src/core/` or `supabase/`. Don't enable Lovable Cloud; this app uses your own Supabase.
+**A scenario no one can win, and one everyone wins, are both bugs.** The first version let a single-server design "survive" *The Slow Provider* because it had no third party to slow down. The autoscaler added one replica every 10 seconds, so *Black Friday* couldn't be won at any budget. Scenarios now require the component they target. Autoscaling now tracks its utilization target. A test proves a reference design wins every scenario within budget, and another proves over-provisioning loses.
+
+**A small local model needs the answer's skeleton handed to it.** With a full fact sheet, Qwen 2.5 1.5B still called an API at 600% utilization "underutilized" and gave generic advice. The fix was to let the engine diagnose: the fact sheet now opens with a computed headline ("API is OVERLOADED at 600% of capacity (1 replica), dropping 5,000 rps"). The model then named the right bottleneck and the right fix, replicas and autoscaling, though it can still misquote a number. The fact sheet is capped at 5,000 characters to fit a 4k-token window alongside the prompt, two prior turns and the answer.
+
+**A passing test suite proved little until it was attacked.** The first run passed 52 of 52. Breaking the engine on purpose showed that one test checked database load but not whether requests still succeeded after the cache died. It does now.
+
+**"Paused" has to look paused.** SVG animations keep running on the browser's clock after React stops updating. The canvas now calls `pauseAnimations()`, and the smoke test checks particle positions while paused.
+
+## Deploy it
+
+It's a static build plus a Supabase project. On Vercel:
+
+```sh
+vercel deploy --prod
+```
+
+Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon key is designed to be public; row-level security protects the data. [vercel.json](vercel.json) adds the SPA rewrite, the CSP, HSTS, `nosniff`, a referrer policy, a `Permissions-Policy` and immutable caching for hashed assets.
+
+**Custom domain:** add it under the project's Domains in Vercel (here `blastradius.ikechukwupeter.com`), create the CNAME record it shows, then add the domain to Supabase → Authentication → URL Configuration.
+
+## Status
+
+**Working:**
+- editor, simulation, chaos, review, cost
+- five challenges with local and verified scores
+- accounts (magic link, GitHub), save, share, fork
+- leaderboard verified on the server
+- on-device AI analyst with three model sizes
+- 52 unit tests plus a 17-check browser smoke test on every push (GitHub Actions)
+
+**Measured:** in [tests/](tests/) and on the live project.
+- **Determinism:** identical scores across runs, and between Node and Deno, for every template and scenario.
+- **Every challenge is winnable within budget,** and over-provisioning loses.
+- **Security:** against the live database with a real session, a forged score insert is refused, a private design is invisible to an anonymous client, and a public link works logged out.
+- **Privacy:** no request leaves the allowed hosts during a full smoke run.
+- **AI analyst:** on a Mac's Apple GPU, Qwen 2.5 1.5B answers in 6–10 s and loads from cache in 3 s. The first download (about 1 GB) took 19 minutes on a slow connection.
+
+**Not built:**
+- **Real-time collaboration:** two people can't edit one design at once.
+- **Custom components:** the nine kinds are fixed, and so is their behaviour.
+- **Calibration against real systems:** the model reproduces the shape of failures, not a particular cloud's numbers.
+- **AI on phones:** WebGPU on mobile is uneven, so the analyst targets desktop.
+
+## Credits
+
+Directed and verified by me: the product, the scenarios and their difficulty, the reviewer's rules, the decision to keep the AI on-device and grounded, and the failures that drove each fix (paused looking like running, unwinnable and trivially winnable challenges). The code, tests and docs were written with AI assistance (Claude), then checked with unit tests, a headless browser, the live database and a real model run before anything was called done.
+
+- Canvas: [React Flow](https://reactflow.dev) (MIT). Charts: [Recharts](https://recharts.org) (MIT). Icons: [Lucide](https://lucide.dev) (ISC).
+- On-device inference: [WebLLM](https://github.com/mlc-ai/web-llm) (Apache-2.0). Models, downloaded by the visitor's browser and not redistributed here: Qwen 2.5 1.5B Instruct (Apache-2.0), Llama 3.2 1B Instruct (Llama 3.2 Community License), Phi-3.5 mini (MIT).
+- Backend: [Supabase](https://supabase.com). Diagram: [Archify](https://github.com/tt-a1i/archify) (MIT).
+
+## License
+
+MIT, for the code in this repo. Use it freely for learning, interviews, or as a starting point. If it helped you, I'd love to hear about it.

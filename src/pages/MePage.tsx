@@ -8,6 +8,7 @@ import { isSupabaseConfigured } from '@/lib/supabase';
 import { displayName, useAuth } from '@/stores/authStore';
 import { toast } from '@/stores/toastStore';
 import { Modal } from '@/components/ui/Modal';
+import { CardSkeleton } from '@/components/ui/Skeleton';
 
 function gradeFor(score: number | null) {
   if (score === null) return null;
@@ -70,7 +71,7 @@ export default function MePage() {
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {rows === null &&
-          Array.from({ length: 3 }, (_, i) => <div key={i} className="panel h-36 animate-pulse bg-panel2/40" />)}
+          Array.from({ length: 3 }, (_, i) => <CardSkeleton key={i} />)}
         {rows?.length === 0 && (
           <div className="col-span-full rounded-lg border border-dashed border-line p-10 text-center text-muted">
             No saved designs yet.{' '}

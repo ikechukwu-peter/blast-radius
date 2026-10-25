@@ -5,9 +5,8 @@ import { ScenarioCard } from '@/components/ScenarioCard';
 
 export default function ChallengesPage() {
   const [top, setTop] = useState<Record<string, number>>({});
-  const [mine, setMine] = useState<Record<string, LocalResult>>({});
+  const [mine] = useState<Record<string, LocalResult>>(readLocalResults);
   useEffect(() => {
-    setMine(readLocalResults());
     topScores().then(setTop).catch(() => {});
   }, []);
   return (

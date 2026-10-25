@@ -5,6 +5,7 @@ import { getLeaderboard, publicSlugs, type LeaderboardRow } from '@/lib/api';
 import { fmtDate, fmtMs, fmtUsd } from '@/lib/format';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/stores/authStore';
+import { TableSkeleton } from '@/components/ui/Skeleton';
 
 const MEDAL = ['#fbbf24', '#cbd5e1', '#d97706'];
 
@@ -12,20 +13,25 @@ export default function LeaderboardPage() {
   const [params, setParams] = useSearchParams();
   const active = SCENARIOS.find((s) => s.id === params.get('s')) ?? SCENARIOS[0];
   const user = useAuth((s) => s.user);
-  const [rows, setRows] = useState<LeaderboardRow[] | null>(null);
-  const [slugs, setSlugs] = useState<Record<string, string>>({});
-  const [error, setError] = useState(false);
+  // Results are keyed by scenario, so switching tabs shows the skeleton until that tab's data lands.
+  const [data, setData] = useState<{ scenarioId: string; rows: LeaderboardRow[] | null; slugs: Record<string, string>; error: boolean } | null>(null);
+  const current = data?.scenarioId === active.id ? data : null;
+  const rows = current?.rows ?? null;
+  const slugs = current?.slugs ?? {};
+  const error = current?.error ?? false;
 
   useEffect(() => {
     if (!isSupabaseConfigured) return;
-    setRows(null);
-    setError(false);
+    let cancelled = false;
     getLeaderboard(active.id)
       .then(async (r) => {
-        setRows(r);
-        setSlugs(await publicSlugs(r.map((x) => x.design_id).filter((x): x is string => !!x)));
+        const s = await publicSlugs(r.map((x) => x.design_id).filter((x): x is string => !!x));
+        if (!cancelled) setData({ scenarioId: active.id, rows: r, slugs: s, error: false });
       })
-      .catch(() => setError(true));
+      .catch(() => !cancelled && setData({ scenarioId: active.id, rows: null, slugs: {}, error: true }));
+    return () => {
+      cancelled = true;
+    };
   }, [active.id]);
 
   return (
@@ -52,11 +58,7 @@ export default function LeaderboardPage() {
       ) : error ? (
         <div className="mt-8 text-center text-bad">Could not load the leaderboard.</div>
       ) : rows === null ? (
-        <div className="mt-6 space-y-2">
-          {Array.from({ length: 5 }, (_, i) => (
-            <div key={i} className="h-12 animate-pulse rounded-md bg-panel" />
-          ))}
-        </div>
+        <TableSkeleton />
       ) : rows.length === 0 ? (
         <div className="mt-8 rounded-lg border border-dashed border-line p-10 text-center text-muted">
           No scores yet.{' '}

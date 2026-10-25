@@ -27,10 +27,7 @@ export default function LandingPage() {
     <div>
       <section className="mx-auto max-w-6xl px-4 pb-16 pt-14 lg:pt-20">
         <div className="mx-auto max-w-3xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-line bg-panel px-3 py-1 text-xs text-muted">
-            <span className="h-1.5 w-1.5 rounded-full bg-bad" /> Chaos engineering for your whiteboard
-          </div>
-          <h1 className="mt-5 font-display text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
+          <h1 className="font-display text-5xl font-bold leading-[1.02] tracking-tight sm:text-7xl">
             Your architecture diagram, <span className="text-ok">but it runs.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg text-muted">Drag in servers, caches and queues. Press play. Then break things and watch what survives.</p>

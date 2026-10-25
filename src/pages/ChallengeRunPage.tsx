@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import {
   KIND_LABELS,
+  reviewDesign,
   SCENARIOS,
   TEMPLATES,
   missingKinds,
@@ -33,6 +34,14 @@ import { toast } from '@/stores/toastStore';
 import { FlowCanvas } from '@/components/editor/FlowCanvas';
 import { LiveStrip } from '@/components/sim/LiveStrip';
 import NotFound from './NotFound';
+import { AnalystPanel } from '@/ai/AnalystPanel';
+import { buildAnalysisContext } from '@/ai/context';
+
+const RESULT_SUGGESTIONS = [
+  'Why did this run fail, second by second?',
+  'What is the cheapest change that would survive?',
+  'Explain what happened at each event in the timeline.',
+];
 
 interface Choice {
   key: string;
@@ -46,7 +55,7 @@ interface Choice {
 function useCountUp(target: number, run: boolean) {
   const [v, setV] = useState(0);
   useEffect(() => {
-    if (!run) return setV(0);
+    if (!run) return;
     const start = performance.now();
     let raf = 0;
     const tick = (now: number) => {
@@ -57,7 +66,16 @@ function useCountUp(target: number, run: boolean) {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [target, run]);
-  return v;
+  return run ? v : 0;
+}
+
+/** Local options available without a network round trip: the browser draft, then templates. */
+function localChoices(): Choice[] {
+  const list: Choice[] = [];
+  const draft = readDraft();
+  if (draft?.design.nodes.length) list.push({ key: 'draft', label: `${draft.title} (current draft)`, group: 'Draft', title: draft.title, design: draft.design });
+  for (const t of TEMPLATES) list.push({ key: `t:${t.id}`, label: t.title, group: 'Templates', title: t.title, design: t.design });
+  return list;
 }
 
 function failingRanges(result: ScenarioResult) {
@@ -84,8 +102,8 @@ export default function ChallengeRunPage() {
   const elapsed = useSim(store, (s) => s.elapsed);
   const metrics = useSim(store, (s) => s.tick?.metrics);
 
-  const [choices, setChoices] = useState<Choice[]>([]);
-  const [choiceKey, setChoiceKey] = useState<string>('');
+  const [choices, setChoices] = useState<Choice[]>(localChoices);
+  const [choiceKey, setChoiceKey] = useState<string>(() => localChoices()[0]?.key ?? '');
   const [phase, setPhase] = useState<'brief' | 'running' | 'results'>('brief');
   const [caption, setCaption] = useState<string | null>(null);
   const [result, setResult] = useState<ScenarioResult | null>(null);
@@ -96,20 +114,13 @@ export default function ChallengeRunPage() {
   useEffect(() => () => store.getState().reset(), [store]);
 
   useEffect(() => {
-    const list: Choice[] = [];
-    const draft = readDraft();
-    if (draft?.design.nodes.length) list.push({ key: 'draft', label: `${draft.title} (current draft)`, group: 'Draft', title: draft.title, design: draft.design });
-    for (const t of TEMPLATES) list.push({ key: `t:${t.id}`, label: t.title, group: 'Templates', title: t.title, design: t.design });
-    setChoices(list);
-    setChoiceKey((k) => k || list[0]?.key || '');
-    if (user && isSupabaseConfigured) {
-      listMyDesigns(user.id)
-        .then((rows) => {
-          const mine: Choice[] = rows.map((r) => ({ key: `d:${r.id}`, label: r.title, group: 'My designs', title: r.title, design: r.graph, designId: r.id }));
-          setChoices([...list.filter((c) => c.group === 'Draft'), ...mine, ...list.filter((c) => c.group === 'Templates')]);
-        })
-        .catch(() => {});
-    }
+    if (!user || !isSupabaseConfigured) return;
+    listMyDesigns(user.id)
+      .then((rows) => {
+        const mine: Choice[] = rows.map((r) => ({ key: `d:${r.id}`, label: r.title, group: 'My designs', title: r.title, design: r.graph, designId: r.id }));
+        setChoices((current) => [...current.filter((c) => c.group === 'Draft'), ...mine, ...current.filter((c) => c.group === 'Templates')]);
+      })
+      .catch(() => {});
   }, [user]);
 
   const choice = choices.find((c) => c.key === choiceKey);
@@ -267,7 +278,7 @@ export default function ChallengeRunPage() {
                   </div>
                   <div>
                     <dt className="text-xs text-muted">Cost / budget</dt>
-                    <dd className="font-num" style={{ color: result.overBudget ? COLORS.bad : undefined }}>
+                    <dd className="whitespace-nowrap font-num" style={{ color: result.overBudget ? COLORS.bad : undefined }}>
                       {fmtUsd(result.monthlyCostUsd)} / {fmtUsd(scenario.goals.maxMonthlyCostUsd)}
                     </dd>
                   </div>
@@ -305,6 +316,13 @@ export default function ChallengeRunPage() {
                 <span className="flex items-center gap-1.5">
                   <span className="h-0.5 w-3 bg-bad" /> errors (dashed = goal)
                 </span>
+              </div>
+              <div className="mt-6 overflow-hidden rounded-lg border border-line">
+                <AnalystPanel
+                  scope="design, its review, the challenge goals and this run second by second"
+                  suggestions={result.survived ? ['Where is this design closest to failing?', 'Can I pass this for less money?', RESULT_SUGGESTIONS[2]] : RESULT_SUGGESTIONS}
+                  getContext={() => (choice ? buildAnalysisContext({ design: choice.design, review: reviewDesign(choice.design), scenario, result }) : '')}
+                />
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <button className="btn" onClick={run}>

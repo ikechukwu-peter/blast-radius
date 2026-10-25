@@ -33,9 +33,18 @@ import { CostPanel } from './CostPanel';
 import { FlowCanvas } from './FlowCanvas';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
+import { AnalystPanel } from '@/ai/AnalystPanel';
+import { buildAnalysisContext } from '@/ai/context';
+
+const EDITOR_SUGGESTIONS = [
+  'What is the biggest risk in this design?',
+  'Why is latency or error rate high right now?',
+  'What happens if the database primary dies?',
+  'How can I cut cost without losing reliability?',
+];
 import { GradeBadge, ReviewPanel } from './ReviewPanel';
 
-type Tab = 'properties' | 'review' | 'cost';
+type Tab = 'properties' | 'review' | 'cost' | 'analyst';
 type Menu = { kind: 'node' | 'edge'; id: string; x: number; y: number } | null;
 
 const TOUR_KEY = 'br:tour-done';
@@ -107,7 +116,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
   const editable = !readOnly && !running;
   const store = useDesign.getState;
 
-  const issues = useMemo(() => validateDesign(design), [structureVersion]);
+  const issues = useMemo(() => validateDesign(design), [design]);
   const invalidIds = useMemo(() => new Set(issues.flatMap((i) => [...i.nodeIds, ...i.edgeIds])), [issues]);
   const findingByNode = useMemo(() => {
     const m: Record<string, string> = {};
@@ -140,7 +149,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [structureVersion, running]);
+  }, [structureVersion, running, store]);
 
   const togglePlay = useCallback(() => {
     const s = editorSim.getState();
@@ -253,13 +262,13 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
   const rightPanel = (
     <>
       <div className="flex border-b border-line">
-        {(['properties', 'review', 'cost'] as Tab[]).map((t) => (
+        {(['properties', 'review', 'cost', 'analyst'] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 px-3 py-2.5 text-xs font-semibold capitalize transition-colors ${tab === t ? 'border-b-2 border-ok text-text' : 'text-muted hover:text-text'}`}
           >
-            {t}
+            {t === 'analyst' ? 'AI' : t}
             {t === 'review' && review && review.findings.length > 0 && (
               <span className="ml-1.5 rounded bg-panel2 px-1 font-num text-[10px] text-muted">{review.findings.length}</span>
             )}
@@ -270,6 +279,17 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
         {tab === 'properties' && <PropertiesPanel readOnly={!editable} />}
         {tab === 'review' && <ReviewPanel review={review} onFindingClick={onFinding} onStart={togglePlay} />}
         {tab === 'cost' && <CostPanel design={design} />}
+        {tab === 'analyst' && (
+          <AnalystPanel
+            scope="design, review, live telemetry and incident log"
+            suggestions={EDITOR_SUGGESTIONS}
+            getContext={() => {
+              const d = store();
+              const sim = editorSim.getState();
+              return buildAnalysisContext({ design: d.design, review: d.review, tick: sim.tick, history: sim.history.slice(-60), events: sim.events, activeChaos: sim.activeChaos.map((c) => c.label) });
+            }}
+          />
+        )}
       </div>
     </>
   );

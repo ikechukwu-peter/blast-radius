@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { GitFork, Loader2, Pencil, Trophy } from 'lucide-react';
+import { GitFork, Pencil, Trophy } from 'lucide-react';
 import { createDesign, getDesignBySlug, getProfileName, type DesignRow } from '@/lib/api';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/stores/authStore';
@@ -8,30 +8,41 @@ import { useDesign } from '@/stores/designStore';
 import { toast } from '@/stores/toastStore';
 import { Brand, UserMenu } from '@/components/Layout';
 import { Workspace } from '@/components/editor/Workspace';
+import { EditorSkeleton } from '@/components/ui/Skeleton';
 
 export default function SharedPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const user = useAuth((s) => s.user);
-  const [row, setRow] = useState<DesignRow | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'notfound' | 'error'>('loading');
-  const [author, setAuthor] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState<{ slug: string; row: DesignRow | null; author: string | null; failed: boolean } | null>(null);
+  const current = loaded?.slug === slug ? loaded : null;
+  const row = current?.row ?? null;
+  const author = current?.author ?? null;
+  const state: 'loading' | 'ready' | 'notfound' | 'error' = !isSupabaseConfigured
+    ? 'error'
+    : !current
+      ? 'loading'
+      : current.failed
+        ? 'error'
+        : current.row
+          ? 'ready'
+          : 'notfound';
   const [forking, setForking] = useState(false);
 
   useEffect(() => {
-    if (!slug) return;
-    if (!isSupabaseConfigured) return setState('error');
-    setState('loading');
+    if (!slug || !isSupabaseConfigured) return;
+    let cancelled = false;
     getDesignBySlug(slug)
       .then(async (r) => {
-        if (!r) return setState('notfound');
-        setRow(r);
-        const name = await getProfileName(r.owner_id);
-        setAuthor(name);
-        useDesign.getState().loadDesign(r.graph, { source: 'shared', title: r.title, savedId: null, authorName: name, ownerId: r.owner_id });
-        setState('ready');
+        const name = r ? await getProfileName(r.owner_id) : null;
+        if (cancelled) return;
+        if (r) useDesign.getState().loadDesign(r.graph, { source: 'shared', title: r.title, savedId: null, authorName: name, ownerId: r.owner_id });
+        setLoaded({ slug, row: r, author: name, failed: false });
       })
-      .catch(() => setState('error'));
+      .catch(() => !cancelled && setLoaded({ slug, row: null, author: null, failed: true }));
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const fork = async () => {
@@ -49,22 +60,15 @@ export default function SharedPage() {
     }
   };
 
+  if (state === 'loading') return <EditorSkeleton readOnly />;
   if (state !== 'ready' || !row) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-        {state === 'loading' ? (
-          <span className="flex items-center gap-2 text-sm text-muted">
-            <Loader2 size={16} className="animate-spin" /> Loading shared design…
-          </span>
-        ) : (
-          <>
-            <h1 className="font-display text-2xl font-semibold">{state === 'notfound' ? 'This design is private or gone' : 'Could not load this design'}</h1>
-            <p className="max-w-sm text-sm text-muted">{isSupabaseConfigured ? 'Ask the owner to make it public, or build your own.' : 'Sharing needs a Supabase project. See the README.'}</p>
-            <Link to="/play" className="btn-primary">
-              Build your own
-            </Link>
-          </>
-        )}
+        <h1 className="font-display text-2xl font-semibold">{state === 'notfound' ? 'This design is private or gone' : 'Could not load this design'}</h1>
+        <p className="max-w-sm text-sm text-muted">{isSupabaseConfigured ? 'Ask the owner to make it public, or build your own.' : 'Sharing needs a Supabase project. See the README.'}</p>
+        <Link to="/play" className="btn-primary">
+          Build your own
+        </Link>
       </div>
     );
   }

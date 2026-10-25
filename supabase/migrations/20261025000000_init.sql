@@ -1,6 +1,5 @@
 -- Blast Radius schema. Run this once in your own Supabase project:
--- Supabase Dashboard -> SQL Editor -> New query -> paste -> Run.
--- Running it yourself (instead of asking Lovable) costs zero credits.
+-- Supabase Dashboard -> SQL Editor -> New query -> paste -> Run (or `supabase db push`).
 
 -- ---------------------------------------------------------------- profiles
 create table if not exists public.profiles (

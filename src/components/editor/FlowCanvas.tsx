@@ -7,7 +7,6 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  applyNodeChanges,
   useReactFlow,
   type Connection,
   type EdgeChange,
@@ -65,7 +64,6 @@ function Inner(props: FlowCanvasProps) {
     showControls = true,
   } = props;
   const rf = useReactFlow();
-  const [nodes, setNodes] = useState<SystemFlowNode[]>([]);
   const wrapper = useRef<HTMLDivElement>(null);
   const paused = useLive((s) => s.status === 'paused' || s.status === 'finished');
 
@@ -75,30 +73,31 @@ function Inner(props: FlowCanvasProps) {
     wrapper.current?.querySelectorAll('svg').forEach((svg) => (paused ? svg.pauseAnimations() : svg.unpauseAnimations()));
   }, [paused, design]);
 
-  // Sync design -> React Flow nodes, preserving React Flow's measured sizes.
-  useEffect(() => {
-    setNodes((prev) => {
-      const prevById = new Map(prev.map((n) => [n.id, n]));
-      return design.nodes.map((dn) => {
-        const old = prevById.get(dn.id);
-        return {
-          ...(old ?? {}),
-          id: dn.id,
-          type: 'system' as const,
-          position: dn.position ?? { x: 0, y: 0 },
-          selected: dn.id === selectedNodeId,
-          draggable: editable,
-          connectable: editable,
-          data: {
-            node: dn,
-            invalid: invalidIds?.has(dn.id),
-            finding: findingByNode?.[dn.id],
-            flashAt: flash?.ids.includes(dn.id) ? flash.at : undefined,
-          },
-        };
-      });
-    });
-  }, [design, selectedNodeId, invalidIds, findingByNode, flash, editable]);
+  // The design store is the single source of truth. React Flow only contributes the sizes
+  // it measures, which are kept here so they survive re-derivation.
+  const [sizes, setSizes] = useState<Record<string, { width: number; height: number }>>({});
+  const [dragging, setDragging] = useState<string | null>(null);
+
+  const nodes = useMemo<SystemFlowNode[]>(
+    () =>
+      design.nodes.map((dn) => ({
+        id: dn.id,
+        type: 'system' as const,
+        position: dn.position ?? { x: 0, y: 0 },
+        measured: sizes[dn.id],
+        selected: dn.id === selectedNodeId,
+        dragging: dn.id === dragging,
+        draggable: editable,
+        connectable: editable,
+        data: {
+          node: dn,
+          invalid: invalidIds?.has(dn.id),
+          finding: findingByNode?.[dn.id],
+          flashAt: flash?.ids.includes(dn.id) ? flash.at : undefined,
+        },
+      })),
+    [design, sizes, dragging, selectedNodeId, invalidIds, findingByNode, flash, editable],
+  );
 
   const edges = useMemo<TrafficFlowEdge[]>(() => {
     const kindOf = new Map(design.nodes.map((n) => [n.id, n.kind]));
@@ -126,12 +125,22 @@ function Inner(props: FlowCanvasProps) {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<SystemFlowNode>[]) => {
-      setNodes((ns) => applyNodeChanges(changes, ns));
+      const measured = changes.filter((c) => c.type === 'dimensions' && c.dimensions);
+      if (measured.length) {
+        setSizes((prev) => {
+          const next = { ...prev };
+          for (const c of measured) if (c.type === 'dimensions' && c.dimensions) next[c.id] = c.dimensions;
+          return next;
+        });
+      }
       if (!editable) return;
       const moves: Record<string, { x: number; y: number }> = {};
       const removed: string[] = [];
       for (const c of changes) {
-        if (c.type === 'position' && c.position) moves[c.id] = c.position;
+        if (c.type === 'position') {
+          if (c.position) moves[c.id] = c.position;
+          setDragging(c.dragging ? c.id : null);
+        }
         if (c.type === 'remove') removed.push(c.id);
       }
       if (Object.keys(moves).length) props.onMove?.(moves);

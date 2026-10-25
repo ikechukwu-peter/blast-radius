@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Check, Copy, Download, FilePlus2, Loader2, Save, Share2 } from 'lucide-react';
+import { Check, Copy, Download, FilePlus2, Save, Share2 } from 'lucide-react';
 import type { Design } from '@/core';
 import { createDesign, getDesign, updateDesign } from '@/lib/api';
 import { exportCanvasPng } from '@/lib/exportPng';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/stores/authStore';
-import { useDesign } from '@/stores/designStore';
+import { readDraft, useDesign } from '@/stores/designStore';
 import { toast } from '@/stores/toastStore';
 import { Brand, NavLinks, UserMenu } from '@/components/Layout';
 import { TemplatePicker } from '@/components/editor/TemplatePicker';
 import { Workspace } from '@/components/editor/Workspace';
 import { Modal } from '@/components/ui/Modal';
+import { EditorSkeleton } from '@/components/ui/Skeleton';
 
 const EMPTY: Design = { version: 1, nodes: [], edges: [] };
 
@@ -26,36 +27,35 @@ export default function EditorPage() {
   const isPublic = useDesign((s) => s.isPublic);
   const shareSlug = useDesign((s) => s.shareSlug);
 
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [fitKey, setFitKey] = useState(0);
-  const [loadState, setLoadState] = useState<'loading' | 'ready' | 'notfound' | 'error'>(id ? 'loading' : 'ready');
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [picks, setPicks] = useState(0);
+  const [pickerOpen, setPickerOpen] = useState(() => !id && !readDraft()?.design.nodes.length);
+  const [fetched, setFetched] = useState<{ id: string; state: 'ready' | 'notfound' | 'error' } | null>(null);
+  const [saveResult, setSaveResult] = useState<{ version: number; ok: boolean } | null>(null);
+  const [creating, setCreating] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load the draft (/play) or a saved design (/d/:id).
+  // /play: the draft lives in this browser and loads straight into the design store.
   useEffect(() => {
-    if (!id) {
-      const hasDraft = useDesign.getState().loadDraft();
-      if (!hasDraft) setPickerOpen(true);
-      setFitKey((k) => k + 1);
-      setLoadState('ready');
-      return;
-    }
-    if (useDesign.getState().savedId === id && useDesign.getState().source === 'saved') {
-      setLoadState('ready');
-      return;
-    }
-    if (!isSupabaseConfigured) return setLoadState('error');
-    if (!authReady) return;
-    setLoadState('loading');
+    if (!id) useDesign.getState().loadDraft();
+  }, [id]);
+
+  // /d/:id: fetch once per id (the route remounts this page per id, see App.tsx).
+  const alreadyLoaded = useDesign((s) => !!id && s.savedId === id && s.source === 'saved');
+  const loadState: 'loading' | 'ready' | 'notfound' | 'error' =
+    !id || alreadyLoaded ? 'ready' : !isSupabaseConfigured ? 'error' : fetched?.id === id ? fetched.state : 'loading';
+
+  useEffect(() => {
+    if (!id || !isSupabaseConfigured || !authReady || useDesign.getState().savedId === id) return;
+    let cancelled = false;
     getDesign(id)
       .then((row) => {
-        if (!row) return setLoadState('notfound');
+        if (cancelled) return;
+        if (!row) return setFetched({ id, state: 'notfound' });
         if (row.owner_id !== user?.id) {
           if (row.is_public) navigate(`/s/${row.share_slug}`, { replace: true });
-          else setLoadState('notfound');
+          else setFetched({ id, state: 'notfound' });
           return;
         }
         useDesign.getState().loadDesign(row.graph, {
@@ -66,44 +66,57 @@ export default function EditorPage() {
           isPublic: row.is_public,
           ownerId: row.owner_id,
         });
-        setFitKey((k) => k + 1);
-        setLoadState('ready');
+        setFetched({ id, state: 'ready' });
       })
-      .catch(() => setLoadState('error'));
+      .catch(() => !cancelled && setFetched({ id, state: 'error' }));
+    return () => {
+      cancelled = true;
+    };
   }, [id, authReady, user?.id, navigate]);
 
-  // Autosave saved designs.
-  // saveVersion is reset to 0 on load, so only real edits trigger a save.
+  // Autosave. saveVersion resets to 0 on load, so only real edits trigger a write; the
+  // status shown is derived from which version last landed.
   useEffect(() => {
     if (!savedId || saveVersion === 0) return;
-    setSaveState('saving');
+    const version = saveVersion;
     const t = setTimeout(async () => {
       const s = useDesign.getState();
       try {
         await updateDesign(savedId, { title: s.title, graph: s.design, review_score: s.review?.score ?? null });
-        setSaveState('saved');
+        setSaveResult({ version, ok: true });
       } catch {
-        setSaveState('error');
+        setSaveResult({ version, ok: false });
       }
     }, 1500);
     return () => clearTimeout(t);
   }, [saveVersion, savedId]);
 
+  const saveState: 'idle' | 'saving' | 'saved' | 'error' = creating
+    ? 'saving'
+    : !savedId || saveVersion === 0
+      ? 'idle'
+      : saveResult?.version === saveVersion
+        ? saveResult.ok
+          ? 'saved'
+          : 'error'
+        : 'saving';
+  const fitKey = `${id ?? 'draft'}:${loadState}:${picks}`;
+
   const save = useCallback(async () => {
     if (savedId) return;
     if (!isSupabaseConfigured) return toast('Connect your Supabase project to save (see README). Your draft is kept in this browser.', 'warn', 5000);
     if (!user) return setSignInOpen(true);
-    setSaveState('saving');
+    setCreating(true);
     try {
       const s = useDesign.getState();
       const row = await createDesign({ title: s.title, graph: s.design, review_score: s.review?.score ?? null });
       s.setMeta({ source: 'saved', savedId: row.id, shareSlug: row.share_slug, isPublic: row.is_public, ownerId: row.owner_id });
-      setSaveState('saved');
       toast('Saved to your designs', 'success');
       navigate(`/d/${row.id}`, { replace: true });
     } catch (err) {
-      setSaveState('error');
       toast(err instanceof Error ? err.message : 'Could not save', 'error');
+    } finally {
+      setCreating(false);
     }
   }, [savedId, user, navigate]);
 
@@ -121,11 +134,7 @@ export default function EditorPage() {
   const shareUrl = shareSlug ? `${window.location.origin}/s/${shareSlug}` : '';
 
   if (loadState === 'loading') {
-    return (
-      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted">
-        <Loader2 size={16} className="animate-spin" /> Loading design…
-      </div>
-    );
+    return <EditorSkeleton />;
   }
   if (loadState !== 'ready') {
     return (
@@ -219,7 +228,7 @@ export default function EditorPage() {
         onPick={(design, t) => {
           useDesign.getState().loadDesign(design ?? EMPTY, { source: 'draft', title: t });
           setPickerOpen(false);
-          setFitKey((k) => k + 1);
+          setPicks((k) => k + 1);
         }}
       />
 

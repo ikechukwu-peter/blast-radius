@@ -1,0 +1,277 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Blast Radius",
+    "output": "../architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "vercel",
+      "type": "external",
+      "label": "Vercel",
+      "sublabel": "blastradius.ikechukwupeter.com",
+      "pos": [
+        315,
+        50
+      ],
+      "size": [
+        220,
+        64
+      ],
+      "tag": "static + CSP"
+    },
+    {
+      "id": "hf",
+      "type": "external",
+      "label": "Hugging Face",
+      "sublabel": "open model weights",
+      "pos": [
+        890,
+        50
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "downloaded once"
+    },
+    {
+      "id": "local",
+      "type": "database",
+      "label": "localStorage",
+      "sublabel": "draft \u00b7 local scores",
+      "pos": [
+        50,
+        240
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "editor",
+      "type": "frontend",
+      "label": "Editor",
+      "sublabel": "React Flow canvas",
+      "pos": [
+        330,
+        240
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "particles \u00b7 chaos"
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "src/core engine",
+      "sublabel": "Simulation \u00b7 reviewDesign",
+      "pos": [
+        610,
+        240
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "seeded, pure TS"
+    },
+    {
+      "id": "analyst",
+      "type": "backend",
+      "label": "AI analyst",
+      "sublabel": "WebLLM Web Worker",
+      "pos": [
+        890,
+        240
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "WebGPU"
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "Supabase Auth",
+      "sublabel": "magic link \u00b7 GitHub",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        190,
+        64
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "Postgres + RLS",
+      "sublabel": "designs \u00b7 challenge_runs",
+      "pos": [
+        325,
+        450
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "edge",
+      "type": "backend",
+      "label": "submit-run",
+      "sublabel": "Deno edge function",
+      "pos": [
+        640,
+        450
+      ],
+      "size": [
+        190,
+        64
+      ],
+      "tag": "re-runs src/core"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Your browser",
+      "wraps": [
+        "local",
+        "editor",
+        "engine",
+        "analyst"
+      ],
+      "pad": 30
+    },
+    {
+      "kind": "region",
+      "label": "Supabase",
+      "wraps": [
+        "auth",
+        "db",
+        "edge"
+      ],
+      "pad": 30
+    }
+  ],
+  "connections": [
+    {
+      "id": "app",
+      "from": "vercel",
+      "to": "editor",
+      "label": "app, HTTPS",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        425,
+        170
+      ]
+    },
+    {
+      "id": "sim",
+      "from": "editor",
+      "to": "engine",
+      "label": "design + chaos",
+      "variant": "emphasis"
+    },
+    {
+      "id": "facts",
+      "from": "engine",
+      "to": "analyst",
+      "label": "fact sheet",
+      "variant": "emphasis"
+    },
+    {
+      "id": "weights",
+      "from": "hf",
+      "to": "analyst",
+      "label": "weights",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        985,
+        128
+      ]
+    },
+    {
+      "id": "draft",
+      "from": "editor",
+      "to": "local",
+      "label": "draft"
+    },
+    {
+      "id": "signin",
+      "from": "editor",
+      "to": "auth",
+      "label": "sign in",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "save",
+      "from": "editor",
+      "to": "db",
+      "label": "save (RLS)",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        468,
+        402
+      ]
+    },
+    {
+      "id": "submit",
+      "from": "editor",
+      "to": "edge",
+      "label": "submit run",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "verified",
+      "from": "edge",
+      "to": "db",
+      "label": "verified score",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Deterministic engine (src/core)",
+      "items": [
+        "Fluid model: request rates through the graph, capacity, saturation latency",
+        "Sampling: ~200 requests per tick give real p50/p95/p99 and timeouts",
+        "Seeded: the same design and scenario always score the same"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "On-device AI analyst",
+      "items": [
+        "Open model on the visitor's GPU via WebLLM, in a Web Worker",
+        "Sees only the engine's fact sheet, so it quotes real numbers",
+        "Nothing about the design is sent anywhere"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Verified leaderboard",
+      "items": [
+        "Clients cannot write scores: RLS has no insert policy",
+        "submit-run re-runs the scenario on the server with the same engine",
+        "CI fails if the server copy of the engine drifts"
+      ]
+    }
+  ]
+}

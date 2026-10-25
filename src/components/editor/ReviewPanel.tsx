@@ -1,19 +1,8 @@
-import { Loader2, Play } from 'lucide-react';
+import { Play } from 'lucide-react';
+import { ReviewSkeleton } from '@/components/ui/Skeleton';
 import type { Finding, Review, Severity } from '@/core';
 import { fmtMs, fmtPct, fmtUsd } from '@/lib/format';
-import { COLORS } from '@/lib/kinds';
-
-export const SEVERITY_COLOR: Record<Severity, string> = {
-  critical: COLORS.bad,
-  high: COLORS.bad,
-  medium: COLORS.warn,
-  low: COLORS.ok,
-  info: COLORS.muted,
-};
-
-export function gradeColor(grade: Review['grade']) {
-  return grade === 'A' ? COLORS.good : grade === 'B' ? COLORS.ok : grade === 'F' ? COLORS.bad : COLORS.warn;
-}
+import { SEVERITY_COLOR, gradeColor } from '@/lib/grades';
 
 export function GradeBadge({ review, onClick }: { review: Review | null; onClick?: () => void }) {
   if (!review) return null;
@@ -33,11 +22,7 @@ export function GradeBadge({ review, onClick }: { review: Review | null; onClick
 
 export function ReviewPanel({ review, onFindingClick, onStart }: { review: Review | null; onFindingClick: (f: Finding) => void; onStart?: () => void }) {
   if (!review) {
-    return (
-      <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted">
-        <Loader2 size={14} className="animate-spin" /> Reviewing design…
-      </div>
-    );
+    return <ReviewSkeleton />;
   }
   const groups = (['critical', 'high', 'medium', 'low', 'info'] as Severity[])
     .map((sev) => ({ sev, items: review.findings.filter((f) => f.severity === sev) }))

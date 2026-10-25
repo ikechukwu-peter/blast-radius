@@ -11,17 +11,14 @@ export function ChaosMenu({ store }: { store: SimStore }) {
   const multiplier = useSim(store, (s) => s.trafficMultiplier);
   const ref = useRef<HTMLDivElement>(null);
   const disabled = status === 'stopped' || status === 'finished';
+  const isOpen = open && !disabled;
 
   useEffect(() => {
-    if (disabled) setOpen(false);
-  }, [disabled]);
-
-  useEffect(() => {
-    if (!open) return;
+    if (!isOpen) return;
     const close = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
     window.addEventListener('mousedown', close);
     return () => window.removeEventListener('mousedown', close);
-  }, [open]);
+  }, [isOpen]);
 
   return (
     <div ref={ref} className="relative">
@@ -34,7 +31,7 @@ export function ChaosMenu({ store }: { store: SimStore }) {
       >
         <Flame size={14} /> Chaos
       </button>
-      {open && (
+      {isOpen && (
         <div className="panel absolute bottom-full left-0 z-40 mb-2 w-64 p-3 shadow-2xl">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Traffic</div>
           <div className="grid grid-cols-5 gap-1">

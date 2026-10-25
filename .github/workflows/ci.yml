@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly, so a broken browser or dependency shows up even without pushes
+  workflow_dispatch:
+
+jobs:
+  verify:
+    name: Lint, types, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Unit tests (engine, reviewer, scenarios, AI context, store, edge-copy drift)
+        run: npm run coverage
+
+  edge:
+    name: Edge function (Deno)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check the leaderboard verifier
+        run: deno check supabase/functions/submit-run/index.ts
+
+  smoke:
+    name: Browser smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Chrome
+        id: chrome
+        uses: browser-actions/setup-chrome@v1
+      - name: Routes render, sim runs/pauses/stops, chaos, challenge, CSP holds, nothing leaves the origin
+        run: npm run smoke
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
