@@ -1,0 +1,169 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* RGB channels so Tailwind opacity modifiers (bg-ok/15) work. */
+  --bg-rgb: 7 9 15;
+  --panel-rgb: 13 17 26;
+  --panel-2-rgb: 18 24 38;
+  --border-rgb: 28 35 51;
+  --text-rgb: 230 233 240;
+  --muted-rgb: 123 132 153;
+  --ok-rgb: 34 211 238;
+  --warn-rgb: 245 158 11;
+  --bad-rgb: 244 63 94;
+  --good-rgb: 52 211 153;
+
+  --bg: rgb(var(--bg-rgb));
+  --panel: rgb(var(--panel-rgb));
+  --panel-2: rgb(var(--panel-2-rgb));
+  --border: rgb(var(--border-rgb));
+  --text: rgb(var(--text-rgb));
+  --muted: rgb(var(--muted-rgb));
+  --ok: rgb(var(--ok-rgb));
+  --warn: rgb(var(--warn-rgb));
+  --bad: rgb(var(--bad-rgb));
+  --good: rgb(var(--good-rgb));
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Space Grotesk', Inter, sans-serif;
+}
+
+.font-num {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ok);
+  outline-offset: 2px;
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-line bg-panel2 px-3 py-1.5 text-sm font-medium text-text transition-colors hover:border-muted/60 disabled:cursor-not-allowed disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply btn border-ok/60 bg-ok/15 text-ok hover:bg-ok/25;
+  }
+  .btn-ghost {
+    @apply btn border-transparent bg-transparent hover:bg-panel2;
+  }
+  .btn-icon {
+    @apply btn h-8 w-8 p-0;
+  }
+  .panel {
+    @apply rounded-lg border border-line bg-panel;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide;
+  }
+  .input {
+    @apply w-full rounded-md border border-line bg-bg px-2 py-1.5 text-sm text-text placeholder:text-muted/60 focus:border-ok/60 focus:outline-none;
+  }
+  .label {
+    @apply mb-1 block text-xs font-medium text-muted;
+  }
+}
+
+/* ------------------------------------------------ React Flow, dark */
+.react-flow {
+  --xy-background-color: var(--bg);
+  --xy-node-border-radius: 8px;
+  --xy-minimap-background-color: var(--panel);
+  --xy-minimap-mask-background-color: rgba(7, 9, 15, 0.7);
+  --xy-controls-button-background-color: var(--panel);
+  --xy-controls-button-background-color-hover: var(--panel-2);
+  --xy-controls-button-color: var(--text);
+  --xy-controls-button-border-color: var(--border);
+  --xy-handle-background-color: var(--panel-2);
+  --xy-handle-border-color: var(--muted);
+  --xy-selection-background-color: rgba(34, 211, 238, 0.06);
+  --xy-selection-border: 1px dashed rgba(34, 211, 238, 0.5);
+  --xy-attribution-background-color: transparent;
+}
+.react-flow__attribution {
+  display: none;
+}
+.react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.react-flow__controls {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: none;
+}
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+}
+.react-flow__handle:hover {
+  background: var(--ok);
+  border-color: var(--ok);
+}
+.react-flow__edge.selected .br-edge-base {
+  stroke: var(--ok) !important;
+  stroke-opacity: 0.8 !important;
+}
+
+/* ------------------------------------------------ Motion */
+@keyframes br-pulse-ring {
+  0% { box-shadow: 0 0 0 0 var(--pulse-color, var(--bad)); }
+  100% { box-shadow: 0 0 0 14px transparent; }
+}
+.br-pulse {
+  animation: br-pulse-ring 0.6s ease-out 2;
+}
+@keyframes br-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.br-breathe {
+  animation: br-breathe 1.2s ease-in-out infinite;
+}
+@keyframes br-toast-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.br-toast {
+  animation: br-toast-in 0.18s ease-out;
+}
+@keyframes br-radar {
+  from { transform: scale(0.4); opacity: 0.8; }
+  to { transform: scale(1.6); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .br-pulse,
+  .br-breathe {
+    animation: none;
+  }
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
