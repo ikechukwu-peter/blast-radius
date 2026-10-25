@@ -2,7 +2,7 @@
 
 **Your architecture diagram, but it runs.**
 
-**Live:** https://blast-radius-tau-pink.vercel.app
+**Live:** https://blastradius.ikechukwupeter.com
 
 Drag in load balancers, API servers, caches, databases, queues and third-party APIs. Press Play and requests flow through your design as particles, with live p50/p95/p99 and error rates. Then break things: kill the database primary, partition the network, add 4 seconds of latency to a provider, send 10x traffic. See what survives.
 
