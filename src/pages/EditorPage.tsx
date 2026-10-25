@@ -217,7 +217,11 @@ export default function EditorPage() {
                 <Save size={14} /> <span className="hidden sm:inline">Save</span>
               </button>
             )}
+            <div className="hidden sm:block">
+              <div className="hidden sm:block">
             <UserMenu />
+          </div>
+            </div>
           </>
         }
       />

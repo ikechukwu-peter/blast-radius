@@ -7,9 +7,9 @@ export interface Goals {
   maxErrorRate: number;
 }
 
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+function Stat({ label, value, color, wide }: { label: string; value: string; color?: string; wide?: boolean }) {
   return (
-    <div className="min-w-[64px]">
+    <div className={`min-w-[56px] sm:min-w-[64px] ${wide ? 'hidden sm:block' : ''}`}>
       <div className="text-[10px] font-medium uppercase tracking-wider text-muted">{label}</div>
       <div className="font-num text-sm font-medium" style={{ color }}>
         {value}
@@ -44,11 +44,11 @@ export function LiveStrip({ metrics, goals, compact = false }: { metrics: Metric
           : undefined;
   return (
     <div className={`flex items-center gap-4 ${compact ? 'gap-3' : 'sm:gap-6'}`}>
-      {!compact && <Stat label="Offered" value={m ? `${fmtRps(m.offeredRps)}/s` : '–'} />}
+      {!compact && <Stat wide label="Offered" value={m ? `${fmtRps(m.offeredRps)}/s` : '–'} />}
       <Stat label="Throughput" value={m ? `${fmtRps(m.throughputRps)}/s` : '–'} />
       <Stat label="Errors" value={m ? fmtPct(m.errorRate) : '–'} color={errColor} />
-      {!compact && <Stat label="p50" value={m ? fmtMs(m.p50Ms) : '–'} />}
-      {!compact && <Stat label="p95" value={m ? fmtMs(m.p95Ms) : '–'} />}
+      {!compact && <Stat wide label="p50" value={m ? fmtMs(m.p50Ms) : '–'} />}
+      {!compact && <Stat wide label="p95" value={m ? fmtMs(m.p95Ms) : '–'} />}
       <Stat label="p99" value={m ? fmtMs(m.p99Ms) : '–'} color={p99Color} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SCENARIOS } from '@/core';
 import { readLocalResults, topScores, type LocalResult } from '@/lib/api';
 import { ScenarioCard } from '@/components/ScenarioCard';
@@ -12,7 +13,12 @@ export default function ChallengesPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-12">
       <div className="max-w-2xl">
-        <div className="font-num text-xs uppercase tracking-widest text-ok">Challenges</div>
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-num text-xs uppercase tracking-widest text-ok">Challenges</div>
+          <Link to="/leaderboard" className="text-sm text-ok hover:underline">
+            Leaderboard →
+          </Link>
+        </div>
         <h1 className="mt-2 font-display text-4xl font-semibold tracking-tight">Think your architecture survives? Prove it.</h1>
         <p className="mt-3 text-muted">
           Each scenario runs a scripted incident against your design. Stay within the latency and error SLOs for the whole run, under budget. Scores are deterministic: the same design always gets the same score.

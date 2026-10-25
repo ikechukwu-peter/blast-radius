@@ -19,6 +19,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { isSplitKind, type Design, type DesignEdge } from '@/core';
 import { COLORS } from '@/lib/kinds';
+import { ViewTransformContext, makeViewTransform, prefersVertical } from '@/lib/viewTransform';
 import { useLive } from '@/stores/simStore';
 import { TextNode, ZoneNode, type AnnotationFlowNode } from './AnnotationNodes';
 import { SystemNode, type SystemFlowNode } from './SystemNode';
@@ -61,6 +62,8 @@ export interface FlowCanvasProps {
   onEdgeDoubleClick?: (edgeId: string) => void;
   /** A palette item dropped on the canvas: a NodeKind, `lib:<id>`, `note` or `zone`. */
   onDropItem?: (item: string, position: Point) => void;
+  onNodeTap?: (nodeId: string, x: number, y: number) => void;
+  onEdgeTap?: (edgeId: string, x: number, y: number) => void;
   onNodeMenu?: (nodeId: string, x: number, y: number) => void;
   onEdgeMenu?: (edgeId: string, x: number, y: number) => void;
 }
@@ -74,6 +77,17 @@ function Inner(props: FlowCanvasProps) {
   const rf = useReactFlow();
   const wrapper = useRef<HTMLDivElement>(null);
   const paused = useLive((s) => s.status === 'paused' || s.status === 'finished');
+
+  // Portrait phones get the diagram top-to-bottom (see lib/viewTransform).
+  const [vertical, setVertical] = useState(false);
+  useEffect(() => {
+    const el = wrapper.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => setVertical(prefersVertical(entry.contentRect.width, entry.contentRect.height)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const vt = useMemo(() => makeViewTransform(vertical), [vertical]);
 
   // Freeze the SVG particle animations while the simulation is paused, so the canvas
   // never looks like it is still running.
@@ -92,12 +106,13 @@ function Inner(props: FlowCanvasProps) {
     const zones: AnnotationFlowNode[] = [];
     const texts: AnnotationFlowNode[] = [];
     for (const a of design.annotations ?? []) {
+      const size = vt.sizeToView(a.width, a.height);
       const n: AnnotationFlowNode = {
         id: a.id,
         type: a.type,
-        position: a.position,
-        width: a.width,
-        height: a.height,
+        position: vt.toView(a.position),
+        width: size.width,
+        height: size.height,
         zIndex: a.type === 'zone' ? -1 : 0,
         selected: selectedNodes.has(a.id),
         draggable: editable,
@@ -109,7 +124,7 @@ function Inner(props: FlowCanvasProps) {
     const systems: SystemFlowNode[] = design.nodes.map((dn) => ({
       id: dn.id,
       type: 'system' as const,
-      position: dn.position ?? { x: 0, y: 0 },
+      position: vt.toView(dn.position ?? { x: 0, y: 0 }),
       measured: sizes[dn.id],
       selected: selectedNodes.has(dn.id),
       dragging: dn.id === dragging,
@@ -124,7 +139,7 @@ function Inner(props: FlowCanvasProps) {
     }));
     // Zones first so they paint underneath everything else.
     return [...zones, ...texts, ...systems];
-  }, [design, sizes, dragging, selectedNodes, invalidIds, findingByNode, flash, editable]);
+  }, [design, sizes, dragging, selectedNodes, invalidIds, findingByNode, flash, editable, vt]);
 
   const edges = useMemo<TrafficFlowEdge[]>(() => {
     const kindOf = new Map(design.nodes.map((n) => [n.id, n.kind]));
@@ -136,15 +151,15 @@ function Inner(props: FlowCanvasProps) {
         id: e.id,
         source: e.source,
         target: e.target,
-        sourceHandle: e.sourceHandle ?? 'r',
-        targetHandle: e.targetHandle ?? 'l',
+        sourceHandle: vt.handle(e.sourceHandle ?? 'r'),
+        targetHandle: vt.handle(e.targetHandle ?? 'l'),
         type: 'traffic' as const,
         selected: selectedEdges.has(e.id),
         reconnectable: editable,
         markerEnd: arrows === 'end' || arrows === 'both' ? marker(color) : undefined,
         markerStart: arrows === 'start' || arrows === 'both' ? marker(color) : undefined,
         data: {
-          edge: e,
+          edge: e.points ? { ...e, points: e.points.map(vt.toView) } : e,
           split: isSplitKind(kindOf.get(e.source) ?? 'api_server'),
           targetId: e.target,
           invalid: invalidIds?.has(e.id),
@@ -152,12 +167,14 @@ function Inner(props: FlowCanvasProps) {
         },
       };
     });
-  }, [design, selectedEdges, invalidIds, editable]);
+  }, [design, selectedEdges, invalidIds, editable, vt]);
 
   useEffect(() => {
-    const t = setTimeout(() => rf.fitView({ padding: interactive ? 0.15 : 0.06, duration: 250, maxZoom: 1.1 }), 60);
+    // On phones (vertical view) keep the bottom clear of the floating controls.
+    const padding = vertical && interactive ? ({ top: '20px', right: '16px', bottom: '76px', left: '16px' } as const) : interactive ? 0.15 : 0.06;
+    const t = setTimeout(() => rf.fitView({ padding, duration: 250, maxZoom: 1.1 }), 60);
     return () => clearTimeout(t);
-  }, [fitKey, rf, interactive]);
+  }, [fitKey, rf, interactive, vertical]);
 
   // Pan to flashed nodes (review findings, incident log clicks).
   useEffect(() => {
@@ -182,7 +199,7 @@ function Inner(props: FlowCanvasProps) {
       const removed: string[] = [];
       for (const c of changes) {
         if (c.type === 'position') {
-          if (c.position) moves[c.id] = c.position;
+          if (c.position) moves[c.id] = vt.fromView(c.position);
           setDragging(c.dragging ? c.id : null);
         }
         if (c.type === 'remove') removed.push(c.id);
@@ -190,7 +207,7 @@ function Inner(props: FlowCanvasProps) {
       if (Object.keys(moves).length) props.onMove?.(moves);
       if (removed.length) props.onRemoveNodes?.(removed);
     },
-    [editable, props],
+    [editable, props, vt],
   );
 
   const onEdgesChange = useCallback(
@@ -210,13 +227,15 @@ function Inner(props: FlowCanvasProps) {
       if (!item || !editable) return;
       e.preventDefault();
       const pos = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      props.onDropItem?.(item, { x: Math.round((pos.x - 88) / 10) * 10, y: Math.round((pos.y - 30) / 10) * 10 });
+      const at = vt.fromView({ x: pos.x - 88, y: pos.y - 30 });
+      props.onDropItem?.(item, { x: Math.round(at.x / 10) * 10, y: Math.round(at.y / 10) * 10 });
     },
-    [editable, props, rf],
+    [editable, props, rf, vt],
   );
 
   return (
     <div ref={wrapper} className="h-full w-full">
+      <ViewTransformContext.Provider value={vt}>
       <ReactFlow<CanvasNode, TrafficFlowEdge>
         nodes={nodes}
         edges={edges}
@@ -225,12 +244,14 @@ function Inner(props: FlowCanvasProps) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         connectionMode={ConnectionMode.Loose}
-        onConnect={(c) => c.source && c.target && props.onConnect?.(c.source, c.target, { sourceHandle: c.sourceHandle, targetHandle: c.targetHandle })}
+        onConnect={(c) => c.source && c.target && props.onConnect?.(c.source, c.target, { sourceHandle: vt.handle(c.sourceHandle), targetHandle: vt.handle(c.targetHandle) })}
         isValidConnection={(c) => c.source !== c.target}
         edgesReconnectable={editable}
-        onReconnect={(old, c) => props.onReconnect?.(old.id, c)}
+        onReconnect={(old, c) => props.onReconnect?.(old.id, { ...c, sourceHandle: vt.handle(c.sourceHandle) ?? null, targetHandle: vt.handle(c.targetHandle) ?? null })}
         onNodeDragStart={() => props.onDragStart?.()}
         onEdgeDoubleClick={(_, edge) => editable && props.onEdgeDoubleClick?.(edge.id)}
+        onNodeClick={(e, n) => props.onNodeTap?.(n.id, e.clientX, e.clientY)}
+        onEdgeClick={(e, edge) => props.onEdgeTap?.(edge.id, e.clientX, e.clientY)}
         onNodeContextMenu={(e, n: Node) => {
           if (!props.onNodeMenu) return;
           e.preventDefault();
@@ -274,6 +295,7 @@ function Inner(props: FlowCanvasProps) {
           <MiniMap pannable zoomable position="bottom-right" nodeColor={() => '#1c2333'} nodeStrokeColor={() => '#2a3347'} className="!hidden md:!block" />
         )}
       </ReactFlow>
+      </ViewTransformContext.Provider>
     </div>
   );
 }

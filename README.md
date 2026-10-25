@@ -28,6 +28,7 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 - **Scores you against incidents.** *Black Friday*, *The Primary Is Gone*, *The Slow Provider*, *Cache Meltdown* and *Retry Storm* each script failures against your design. To survive, you have to stay within the latency and error SLOs for most of the run **and** under budget, so over-provisioning loses too. A reference design proves every scenario can be won. See [scenarios.ts L166](src/core/scenarios.ts#L166).
 - **Verifies the leaderboard on the server.** The browser can't write a score. A Supabase edge function reloads your design, re-runs the scenario with the same engine and stores the result, along with the exact design that earned it. See [submit-run](supabase/functions/submit-run/index.ts#L95).
 - **Explains results with an AI that runs on your GPU.** Open the **AI** tab, or ask after a challenge. A small open model (Qwen 2.5 1.5B by default) runs in the browser through WebLLM and WebGPU, with no API key and no server. It is given a fact sheet built from the engine's own output and told to use only those numbers. You can see exactly what it was shown. See [context.ts](src/ai/context.ts#L51) and [decision 006](docs/decisions/006-on-device-ai.md).
+- **Works on phones.** On a portrait screen the diagram is shown top-to-bottom at full size instead of shrinking a left-to-right strip. It's a view transform, so the saved layout never changes ([viewTransform.ts](src/lib/viewTransform.ts)). Tapping a component while the simulation runs opens the chaos menu, since phones have no right-click.
 - **Saves, shares and forks.** Sign in by email magic link or GitHub. Designs autosave; a public link lets anyone run and break your design, then fork it. Without an account, your draft is kept in the browser.
 
 ## Run it locally
@@ -35,8 +36,8 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 ```sh
 npm install
 npm run dev          # http://localhost:8080
-npm test             # 71 unit tests: engine, reviewer, scenarios, drawing rules, link geometry, AI fact sheet, store, edge-copy drift
-npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP (22 checks)
+npm test             # 76 unit tests: engine, reviewer, scenarios, drawing rules, link geometry, AI fact sheet, store, edge-copy drift
+npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP, on desktop and phone (25 checks)
 npm run check        # lint + types + tests + build + smoke, the same as CI
 ```
 
@@ -124,7 +125,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon ke
 - leaderboard verified on the server
 - on-device AI analyst with three model sizes
 - draw.io-style editing: custom components, labels, bends, arrowheads, notes, zones, multi-select, copy/paste
-- 71 unit tests plus a 22-check browser smoke test on every push (GitHub Actions)
+- 76 unit tests plus a 25-check browser smoke test (desktop and phone) on every push (GitHub Actions)
 
 **Measured:** in [tests/](tests/) and on the live project.
 - **Determinism:** identical scores across runs, and between Node and Deno, for every template and scenario.
@@ -138,7 +139,7 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon ke
 - **New behaviours:** custom components borrow one of the nine built-in behaviours; you can't define a new one.
 - **Parent-child grouping:** zones are drawn behind components but don't carry them when moved; select both to move them together.
 - **Calibration against real systems:** the model reproduces the shape of failures, not a particular cloud's numbers.
-- **AI on phones:** WebGPU on mobile is uneven, so the analyst targets desktop.
+- **AI on phones:** WebGPU on mobile is uneven, so the analyst targets desktop. The rest of the app works on phones.
 
 ## Credits
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import {
   ArrowLeftRight,
   BookmarkPlus,
+  Pencil,
   Copy,
   Minus,
   Repeat,
@@ -115,6 +116,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
   const history = useSim(editorSim, (s) => s.history);
   const events = useSim(editorSim, (s) => s.events);
   const multiplier = useSim(editorSim, (s) => s.trafficMultiplier);
+  const activeChaosCount = useSim(editorSim, (s) => s.activeChaos.length);
 
   const [tab, setTab] = useState<Tab>('properties');
   const [panelOpen, setPanelOpen] = useState(false);
@@ -129,9 +131,10 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
       return null;
     }
   });
-  const [smallBannerHidden, setSmallBannerHidden] = useState(false);
 
   const running = status === 'running' || status === 'paused';
+  /** Phones and tablets have no right-click, so taps stand in for the context menu. */
+  const coarse = useMemo(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches, []);
   const editable = !readOnly && !running;
   const store = useDesign.getState;
 
@@ -412,6 +415,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
         {/* Header */}
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-panel px-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">{headerLeft}</div>
+          <div className="hidden sm:block">
           <GradeBadge
             review={review}
             onClick={() => {
@@ -419,6 +423,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
               setPanelOpen(true);
             }}
           />
+          </div>
           <button className="btn-icon hidden md:inline-flex" onClick={() => setShortcutsOpen(true)} aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)">
             <Keyboard size={15} />
           </button>
@@ -428,14 +433,6 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
           </button>
         </header>
 
-        {!smallBannerHidden && (
-          <div className="flex items-center justify-between gap-2 border-b border-line bg-warn/10 px-3 py-1.5 text-xs text-warn sm:hidden">
-            Best on a larger screen. Everything still works here.
-            <button onClick={() => setSmallBannerHidden(true)} aria-label="Dismiss">
-              <X size={13} />
-            </button>
-          </div>
-        )}
 
         <div className="relative flex min-h-0 flex-1">
           {/* Palette */}
@@ -468,6 +465,12 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
               }}
               onEdgeDoubleClick={(id) => store().setEditingEdge(id)}
               onDropItem={(item, pos) => addItem(item, pos)}
+              onNodeTap={(id, x, y) => {
+                if (coarse && running && design.nodes.some((n) => n.id === id)) setMenu({ kind: 'node', id, x, y });
+              }}
+              onEdgeTap={(id, x, y) => {
+                if (coarse && running) setMenu({ kind: 'edge', id, x, y });
+              }}
               onNodeMenu={(id, x, y) => {
                 store().select(id);
                 setMenu({ kind: 'node', id, x, y });
@@ -504,14 +507,39 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
               </div>
             )}
 
-            {!readOnly && (
-              <button
-                className="btn-primary absolute bottom-4 left-1/2 z-10 -translate-x-1/2 shadow-lg md:hidden"
-                onClick={() => setPaletteOpen(true)}
-              >
-                <Plus size={15} /> Add component
-              </button>
-            )}
+            {/* Phones: one floating control, depending on what you can do right now. */}
+            <div className="absolute inset-x-0 bottom-3 z-10 flex justify-center px-3 lg:hidden">
+              {running ? (
+                !activeChaosCount && <span className="rounded-full border border-line bg-bg/90 px-3 py-1.5 text-xs text-muted backdrop-blur md:hidden">
+                  Tap a component or link to break it
+                </span>
+              ) : !readOnly && (selectedNodeIds.length || selectedEdgeIds.length) ? (
+                <div className="flex gap-1.5 rounded-xl border border-line bg-panel/95 p-1.5 shadow-2xl backdrop-blur">
+                  {(selectedNodeIds.length + selectedEdgeIds.length === 1) && (
+                    <button className="btn-primary" onClick={() => { setTab('properties'); setPanelOpen(true); }}>
+                      <Pencil size={14} /> Edit
+                    </button>
+                  )}
+                  {selectedEdgeIds.length === 1 && !selectedNodeIds.length && (
+                    <button className="btn" onClick={() => store().setEditingEdge(selectedEdgeIds[0])}>
+                      <Type size={14} /> Label
+                    </button>
+                  )}
+                  {selectedNodeIds.length > 0 && (
+                    <button className="btn" onClick={() => store().duplicateSelection()} aria-label="Duplicate">
+                      <Copy size={14} />
+                    </button>
+                  )}
+                  <button className="btn text-bad" onClick={() => { store().removeNodes(selectedNodeIds); store().removeEdges(selectedEdgeIds); }} aria-label="Delete">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : !readOnly ? (
+                <button className="btn-primary shadow-lg md:hidden" onClick={() => setPaletteOpen(true)}>
+                  <Plus size={15} /> Add component
+                </button>
+              ) : null}
+            </div>
 
             {tourStep !== null && (
               <div className="panel absolute bottom-4 left-4 z-20 hidden w-72 p-4 shadow-2xl md:block">
@@ -555,14 +583,14 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
 
         {/* Sim bar */}
         <footer className="shrink-0 border-t border-line bg-panel">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-2">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-2 py-2 sm:px-3">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button className={status === 'running' ? 'btn' : 'btn-primary'} onClick={togglePlay} aria-label={status === 'running' ? 'Pause' : 'Play'} title="Space">
                 {status === 'running' ? <Pause size={14} /> : <Play size={14} />}
                 {status === 'running' ? 'Pause' : status === 'paused' ? 'Resume' : 'Play'}
               </button>
               <button className="btn" onClick={() => editorSim.getState().reset()} disabled={status === 'stopped'} aria-label="Stop simulation" title="Stop and reset (Esc)">
-                <Square size={12} fill="currentColor" /> Stop
+                <Square size={12} fill="currentColor" /> <span className="hidden sm:inline">Stop</span>
               </button>
               <div className="flex overflow-hidden rounded-md border border-line" role="group" aria-label="Speed">
                 {[1, 2, 5].map((s) => (
@@ -575,15 +603,15 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
                   </button>
                 ))}
               </div>
-              <span className="font-num text-sm text-muted" aria-label="Simulated time">
+              <span className="hidden font-num text-sm text-muted sm:inline" aria-label="Simulated time">
                 t={fmtClock(elapsed)}
               </span>
-              {multiplier !== 1 && <span className="chip bg-warn/15 text-warn">Traffic {multiplier}x</span>}
+              {multiplier !== 1 && <span className="chip hidden bg-warn/15 text-warn sm:inline-flex">Traffic {multiplier}x</span>}
               <ChaosMenu store={editorSim} />
             </div>
-            <div className="flex flex-1 items-center justify-end gap-4 overflow-x-auto">
+            <div className="flex w-full items-center justify-between gap-4 overflow-x-auto sm:w-auto sm:flex-1 sm:justify-end">
               <LiveStrip metrics={metrics} />
-              <button className="btn-icon shrink-0" onClick={() => setTelemetryOpen((o) => !o)} aria-label="Toggle telemetry">
+              <button className="btn-icon hidden shrink-0 md:inline-flex" onClick={() => setTelemetryOpen((o) => !o)} aria-label="Toggle telemetry">
                 {telemetryOpen ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
               </button>
             </div>

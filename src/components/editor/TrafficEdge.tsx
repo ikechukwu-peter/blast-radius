@@ -6,6 +6,7 @@ import { edgeGeometry, type Pt } from '@/lib/edgePath';
 import { clamp, fmtMs, fmtRps } from '@/lib/format';
 import { COLORS } from '@/lib/kinds';
 import { useDesign } from '@/stores/designStore';
+import { useViewTransform } from '@/lib/viewTransform';
 import { useLive } from '@/stores/simStore';
 
 export type TrafficEdgeData = {
@@ -48,6 +49,9 @@ const Particles = memo(function Particles({ path, count, color, dur }: { path: s
 /** Draggable bend points, plus a "+" on every segment to add one. Double-click a point to remove it. */
 function BendHandles({ edge, vertices }: { edge: DesignEdge; vertices: Pt[] }) {
   const rf = useReactFlow();
+  const vt = useViewTransform();
+  /** `edge.points` here are in view coordinates; the store keeps model coordinates. */
+  const save = (points: Pt[], record: boolean) => useDesign.getState().styleEdge(edge.id, { points: points.map(vt.fromView) }, record);
 
   /**
    * Drag a bend point, or drag a "+" to create one. A "+" only becomes a bend once the pointer
@@ -70,7 +74,7 @@ function BendHandles({ edge, vertices }: { edge: DesignEdge; vertices: Pt[] }) {
       }
       const p = snap(rf.screenToFlowPosition({ x: ev.clientX, y: ev.clientY }));
       points = points.map((q, i) => (i === index ? p : q));
-      store.styleEdge(edge.id, { points }, false);
+      save(points, false);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -80,9 +84,7 @@ function BendHandles({ edge, vertices }: { edge: DesignEdge; vertices: Pt[] }) {
     window.addEventListener('pointerup', up);
   };
 
-  const remove = (index: number) => {
-    useDesign.getState().styleEdge(edge.id, { points: (edge.points ?? []).filter((_, i) => i !== index) });
-  };
+  const remove = (index: number) => save((edge.points ?? []).filter((_, i) => i !== index), true);
 
   const dot = 'nodrag nopan pointer-events-auto absolute rounded-full border-2 border-ok';
   return (

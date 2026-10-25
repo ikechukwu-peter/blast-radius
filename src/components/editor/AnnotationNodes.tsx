@@ -2,6 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react';
 import { NodeResizer, type Node, type NodeProps } from '@xyflow/react';
 import type { Annotation } from '@/core';
 import { useDesign } from '@/stores/designStore';
+import { useViewTransform, type ViewTransform } from '@/lib/viewTransform';
 import { SideHandles } from './SystemNode';
 
 export type AnnotationNodeData = { annotation: Annotation; editable: boolean };
@@ -37,24 +38,25 @@ function useInlineEdit(annotation: Annotation, editable: boolean) {
   return { editing, draft, setDraft, ref, start, commit, keys };
 }
 
-function resizeHandlers(id: string) {
+function resizeHandlers(id: string, vt: ViewTransform) {
   return {
     onResizeStart: () => useDesign.getState().snapshot(),
     onResize: (_: unknown, p: { x: number; y: number; width: number; height: number }) =>
-      useDesign.getState().updateAnnotation(id, { position: { x: p.x, y: p.y }, width: p.width, height: p.height }, false),
+      useDesign.getState().updateAnnotation(id, { position: vt.fromView({ x: p.x, y: p.y }), ...vt.sizeFromView(p.width, p.height) }, false),
   };
 }
 
 function TextNodeImpl({ data, selected }: NodeProps<AnnotationFlowNode>) {
   const { annotation, editable } = data;
+  const vt = useViewTransform();
   const { editing, draft, setDraft, ref, start, commit, keys } = useInlineEdit(annotation, editable);
   return (
     <div
       className="relative h-full w-full rounded-md border border-transparent px-2 py-1 hover:border-line"
-      style={{ width: annotation.width, height: annotation.height, borderColor: selected ? 'var(--ok)' : undefined }}
+      style={{ width: '100%', height: '100%', borderColor: selected ? 'var(--ok)' : undefined }}
       onDoubleClick={start}
     >
-      {editable && <NodeResizer isVisible={selected} minWidth={80} minHeight={28} color="var(--ok)" {...resizeHandlers(annotation.id)} />}
+      {editable && <NodeResizer isVisible={selected} minWidth={80} minHeight={28} color="var(--ok)" {...resizeHandlers(annotation.id, vt)} />}
       <SideHandles />
       {editing ? (
         <textarea
@@ -77,14 +79,15 @@ function TextNodeImpl({ data, selected }: NodeProps<AnnotationFlowNode>) {
 
 function ZoneNodeImpl({ data, selected }: NodeProps<AnnotationFlowNode>) {
   const { annotation, editable } = data;
+  const vt = useViewTransform();
   const color = annotation.color ?? '#22d3ee';
   const { editing, draft, setDraft, ref, start, commit, keys } = useInlineEdit(annotation, editable);
   return (
     <div
       className="relative rounded-xl border-[1.5px] border-dashed"
-      style={{ width: annotation.width, height: annotation.height, borderColor: selected ? 'var(--ok)' : `${color}99`, background: `${color}0d` }}
+      style={{ width: '100%', height: '100%', borderColor: selected ? 'var(--ok)' : `${color}99`, background: `${color}0d` }}
     >
-      {editable && <NodeResizer isVisible={selected} minWidth={120} minHeight={80} color="var(--ok)" {...resizeHandlers(annotation.id)} />}
+      {editable && <NodeResizer isVisible={selected} minWidth={120} minHeight={80} color="var(--ok)" {...resizeHandlers(annotation.id, vt)} />}
       <SideHandles />
       <div className="absolute left-3 top-2" onDoubleClick={start}>
         {editing ? (

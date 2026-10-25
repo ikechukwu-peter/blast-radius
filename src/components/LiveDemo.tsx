@@ -57,7 +57,7 @@ export function LiveDemo() {
 
   return (
     <div ref={ref} className="relative">
-      <div className="panel relative h-[300px] overflow-hidden sm:h-[460px]">
+      <div className="panel relative h-[480px] overflow-hidden sm:h-[460px]">
         <LiveContext.Provider value={store}>
           <FlowCanvas design={design} interactive={false} fitKey="demo" />
         </LiveContext.Provider>

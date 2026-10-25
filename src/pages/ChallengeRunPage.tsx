@@ -215,7 +215,7 @@ export default function ChallengeRunPage() {
           <p className="mt-2 max-w-2xl text-muted">{scenario.briefing}</p>
 
           {/* Stage */}
-          <div className="panel relative mt-6 h-[420px] overflow-hidden">
+          <div className="panel relative mt-6 h-[560px] overflow-hidden sm:h-[420px]">
             {choice ? (
               <LiveContext.Provider value={store}>
                 <FlowCanvas design={choice.design} fitKey={choice.key} showMinimap={false} />

@@ -27,7 +27,7 @@ export function UserMenu() {
 
   if (!user) {
     return (
-      <Link to="/auth" className="btn">
+      <Link to="/auth" className="btn whitespace-nowrap">
         Sign in
       </Link>
     );
@@ -61,7 +61,7 @@ export function UserMenu() {
 }
 
 export function NavLinks() {
-  const cls = ({ isActive }: { isActive: boolean }) => `rounded-md px-2.5 py-1.5 text-sm ${isActive ? 'text-text' : 'text-muted hover:text-text'}`;
+  const cls = ({ isActive }: { isActive: boolean }) => `whitespace-nowrap rounded-md px-2 py-1.5 text-sm sm:px-2.5 ${isActive ? 'text-text' : 'text-muted hover:text-text'}`;
   return (
     <nav className="flex items-center gap-0.5">
       <NavLink to="/play" className={cls}>
@@ -70,7 +70,7 @@ export function NavLinks() {
       <NavLink to="/challenges" className={cls}>
         Challenges
       </NavLink>
-      <NavLink to="/leaderboard" className={cls}>
+      <NavLink to="/leaderboard" className={(a) => `${cls(a)} hidden sm:inline-block`}>
         Leaderboard
       </NavLink>
     </nav>

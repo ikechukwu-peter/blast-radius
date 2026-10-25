@@ -102,7 +102,9 @@ export default function SharedPage() {
               <GitFork size={14} /> Fork to edit
             </button>
           )}
-          <UserMenu />
+          <div className="hidden sm:block">
+            <UserMenu />
+          </div>
         </>
       }
     />

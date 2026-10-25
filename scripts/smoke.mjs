@@ -163,6 +163,26 @@ try {
     check((await page.evaluate(() => document.body.innerText.length)) > 50, `route ${route} renders`);
   }
 
+  // Phone: the diagram turns top-to-bottom at full size, nothing scrolls sideways, taps break things.
+  await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  await page.goto(`${BASE}/play`, { waitUntil: 'networkidle0' });
+  await page.evaluate(() => localStorage.removeItem('br:draft'));
+  await page.goto(`${BASE}/play`, { waitUntil: 'networkidle0' });
+  await click('Classic Three-Tier');
+  await wait(1200);
+  const layout = await page.evaluate(() => {
+    const r = (id) => document.querySelector(`.react-flow__node[data-id="${id}"]`).getBoundingClientRect();
+    return { vertical: r('db').top > r('users').bottom, width: r('api').width, noHScroll: document.documentElement.scrollWidth <= innerWidth };
+  });
+  check(layout.vertical && layout.width >= 150, `phone: diagram flows top-to-bottom at a readable size (${Math.round(layout.width)}px cards)`);
+  check(layout.noHScroll, 'phone: no sideways scrolling');
+  await page.evaluate(() => [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Play')?.click());
+  await wait(1500);
+  const dbBox = await (await page.$('.react-flow__node[data-id="db"]')).boundingBox();
+  await page.touchscreen.tap(dbBox.x + 40, dbBox.y + 20);
+  await wait(400);
+  check(await page.evaluate(() => [...document.querySelectorAll('[role=menuitem]')].some((m) => m.textContent.includes('Kill instance'))), 'phone: tapping a component while running opens the chaos menu');
+
   check(errors.length === 0, `no console errors${errors.length ? `: ${errors.slice(0, 3).join(' | ')}` : ''}`);
   check(offOrigin.size === 0, `no requests leave the origin${offOrigin.size ? `: ${[...offOrigin].join(', ')}` : ''}`);
   await browser.close();
