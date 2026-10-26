@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Check, Copy, Download, FilePlus2, Save, Share2 } from 'lucide-react';
+import { Check, Copy, Download, FilePlus2, Film, Save, Share2 } from 'lucide-react';
 import type { Design } from '@/core';
 import { createDesign, getDesign, updateDesign } from '@/lib/api';
 import { exportCanvasPng } from '@/lib/exportPng';
@@ -15,6 +15,8 @@ import { Modal } from '@/components/ui/Modal';
 import { EditorSkeleton } from '@/components/ui/Skeleton';
 
 const EMPTY: Design = { version: 1, nodes: [], edges: [] };
+// The video exporter (renderer, encoder) loads only when someone opens it.
+const ExportVideoModal = lazy(() => import('@/export/ExportVideoModal'));
 
 export default function EditorPage() {
   const { id } = useParams();
@@ -35,6 +37,8 @@ export default function EditorPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const design = useDesign((s) => s.design);
 
   // /play: the draft lives in this browser and loads straight into the design store.
   useEffect(() => {
@@ -201,6 +205,9 @@ export default function EditorPage() {
                 <FilePlus2 size={15} />
               </button>
             )}
+            <button className="btn-icon" onClick={() => setVideoOpen(true)} aria-label="Export video" title="Export as video (MP4)">
+              <Film size={15} />
+            </button>
             <button
               className="btn-icon hidden sm:inline-flex"
               onClick={() => exportCanvasPng(title).catch(() => toast('Export failed', 'error'))}
@@ -235,6 +242,12 @@ export default function EditorPage() {
           setPicks((k) => k + 1);
         }}
       />
+
+      {videoOpen && (
+        <Suspense fallback={null}>
+          <ExportVideoModal open={videoOpen} onClose={() => setVideoOpen(false)} design={design} title={title} />
+        </Suspense>
+      )}
 
       <Modal open={signInOpen} onClose={() => setSignInOpen(false)} title="Sign in to save">
         <p className="text-sm text-muted">Your draft stays in this browser. Sign in to save it to your account, share it, and submit challenge scores.</p>

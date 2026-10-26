@@ -6,7 +6,7 @@ import { useViewTransform, type ViewTransform } from '@/lib/viewTransform';
 import { SideHandles } from './SystemNode';
 
 export type AnnotationNodeData = { annotation: Annotation; editable: boolean };
-export type AnnotationFlowNode = Node<AnnotationNodeData, 'text' | 'zone'>;
+export type AnnotationFlowNode = Node<AnnotationNodeData, 'text' | 'zone' | 'stage'>;
 
 const FONT = { sm: 'text-xs', md: 'text-sm', lg: 'text-lg font-semibold' } as const;
 
@@ -110,5 +110,40 @@ function ZoneNodeImpl({ data, selected }: NodeProps<AnnotationFlowNode>) {
   );
 }
 
+/** A labelled column: a solid pill on top (like an architecture poster) and a faint band below. */
+function StageNodeImpl({ data, selected }: NodeProps<AnnotationFlowNode>) {
+  const { annotation, editable } = data;
+  const vt = useViewTransform();
+  const color = annotation.color ?? '#3b82f6';
+  const { editing, draft, setDraft, ref, start, commit, keys } = useInlineEdit(annotation, editable);
+  return (
+    <div
+      className="relative rounded-2xl"
+      style={{ width: '100%', height: '100%', background: `linear-gradient(180deg, ${color}14, ${color}05 40%, transparent)`, outline: selected ? '1.5px solid var(--ok)' : undefined }}
+    >
+      {editable && <NodeResizer isVisible={selected} minWidth={140} minHeight={140} color="var(--ok)" {...resizeHandlers(annotation.id, vt)} />}
+      {/* Turned on its side the band is short, so the name sits on its edge, clear of the cards. */}
+      <div className={`absolute inset-x-0 top-0 flex justify-center ${vt.vertical ? '-translate-y-1/2' : ''}`} onDoubleClick={start}>
+        {editing ? (
+          <input
+            ref={ref}
+            className="nodrag mt-1 w-[90%] rounded-lg bg-bg px-2 py-1.5 text-center text-sm font-bold text-text outline-none ring-1 ring-ok/60"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => keys(e, false)}
+            aria-label="Stage name"
+          />
+        ) : (
+          <span className="mt-1 max-w-[92%] truncate rounded-lg px-4 py-1.5 text-sm font-bold text-white shadow-lg" style={{ background: color, boxShadow: `0 6px 18px -6px ${color}` }}>
+            {annotation.text || 'Stage'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export const TextNode = memo(TextNodeImpl);
+export const StageNode = memo(StageNodeImpl);
 export const ZoneNode = memo(ZoneNodeImpl);

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowLeftRight, ArrowRight, BookmarkPlus, Minus, Repeat, Spl
 import { KIND_LABELS, isSplitKind } from '@/core';
 import { article } from '@/lib/format';
 import { ICONS, ICON_NAMES, SWATCHES } from '@/lib/icons';
+import { PROVIDER_LABEL, cloudService, isCloudIcon } from '@/lib/cloudCatalog';
 import { useDesign } from '@/stores/designStore';
 import { useLibrary } from '@/stores/libraryStore';
 import { toast } from '@/stores/toastStore';
@@ -169,6 +170,7 @@ export function AppearanceFields({ nodeId, readOnly }: { nodeId: string; readOnl
   const upsert = useLibrary((s) => s.upsert);
   if (!node) return null;
   const a = node.appearance ?? {};
+  const official = isCloudIcon(a.icon);
   const set = (patch: Partial<typeof a>) => useDesign.getState().updateNode(node.id, { appearance: { ...a, ...patch } });
 
   return (
@@ -187,6 +189,11 @@ export function AppearanceFields({ nodeId, readOnly }: { nodeId: string; readOnl
           />
           <span className="mt-1 block text-[11px] text-muted/80">Still simulated as {article(KIND_LABELS[node.kind])} {KIND_LABELS[node.kind]}.</span>
         </label>
+        {official && (
+          <p className="rounded-md border border-line bg-bg p-2 text-[11px] text-muted">
+            Official {PROVIDER_LABEL[cloudService(a.icon!.slice(6))?.provider ?? 'aws']} architecture icon, shown unmodified with its full service name. Pick another icon below to replace it.
+          </p>
+        )}
         <div>
           <span className="label">Icon</span>
           <div className="grid grid-cols-8 gap-1">
@@ -207,11 +214,13 @@ export function AppearanceFields({ nodeId, readOnly }: { nodeId: string; readOnl
             })}
           </div>
         </div>
-        <div>
-          <span className="label">Colour</span>
-          <Swatches value={a.color} onChange={(c) => set({ color: c })} disabled={readOnly} />
-        </div>
-        {!readOnly && (
+        {!official && (
+          <div>
+            <span className="label">Colour</span>
+            <Swatches value={a.color} onChange={(c) => set({ color: c })} disabled={readOnly} />
+          </div>
+        )}
+        {!readOnly && !official && (
           <button
             className="btn w-full"
             onClick={() => {
@@ -231,10 +240,10 @@ export function AnnotationProperties({ id, readOnly }: { id: string; readOnly: b
   const a = useDesign((s) => s.design.annotations?.find((x) => x.id === id));
   if (!a) return null;
   const store = useDesign.getState();
-  const isZone = a.type === 'zone';
+  const isZone = a.type !== 'text';
   return (
     <div className="space-y-4 p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{isZone ? 'Zone' : 'Text note'} · drawing only</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted">{a.type === 'stage' ? 'Stage column' : isZone ? 'Zone' : 'Text note'} · drawing only</div>
       <label className="block">
         <span className="label">{isZone ? 'Name' : 'Text'}</span>
         {isZone ? (
@@ -265,7 +274,7 @@ export function AnnotationProperties({ id, readOnly }: { id: string; readOnly: b
       <p className="text-[11px] text-muted">Double-click it on the canvas to edit in place; drag its corners to resize. You can link notes and zones to components too.</p>
       {!readOnly && (
         <button className="btn w-full text-bad" onClick={() => store.removeNodes([a.id])}>
-          <Trash2 size={14} /> Delete {isZone ? 'zone' : 'note'}
+          <Trash2 size={14} /> Delete {a.type === 'stage' ? 'stage' : isZone ? 'zone' : 'note'}
         </button>
       )}
     </div>

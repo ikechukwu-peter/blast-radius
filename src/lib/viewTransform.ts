@@ -25,7 +25,7 @@ export interface ViewTransform {
 
 const SIDE: Record<string, string> = { r: 'b', b: 'r', l: 't', t: 'l' };
 
-export function makeViewTransform(vertical: boolean): ViewTransform {
+export function makeViewTransform(vertical: boolean, squash = FLOW_SQUASH): ViewTransform {
   if (!vertical) {
     return {
       vertical,
@@ -38,10 +38,10 @@ export function makeViewTransform(vertical: boolean): ViewTransform {
   }
   return {
     vertical,
-    toView: (p) => ({ x: p.y, y: p.x * FLOW_SQUASH }),
-    fromView: (p) => ({ x: p.y / FLOW_SQUASH, y: p.x }),
-    sizeToView: (w, h) => ({ width: h, height: w * FLOW_SQUASH }),
-    sizeFromView: (w, h) => ({ width: h / FLOW_SQUASH, height: w }),
+    toView: (p) => ({ x: p.y, y: p.x * squash }),
+    fromView: (p) => ({ x: p.y / squash, y: p.x }),
+    sizeToView: (w, h) => ({ width: h, height: w * squash }),
+    sizeFromView: (w, h) => ({ width: h / squash, height: w }),
     handle: (id) => (id ? (SIDE[id] ?? id) : undefined),
   };
 }

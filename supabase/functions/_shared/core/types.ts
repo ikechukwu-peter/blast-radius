@@ -107,7 +107,8 @@ export interface DesignEdge {
 /** Drawing-only shapes: notes and grouping zones. The engine never sees them. */
 export interface Annotation {
   id: string;
-  type: 'text' | 'zone';
+  /** text: a note; zone: a grouping box; stage: a labelled column (Ingestion, Data Lake, ...). */
+  type: 'text' | 'zone' | 'stage';
   position: { x: number; y: number };
   width: number;
   height: number;

@@ -41,6 +41,7 @@ import { CostPanel } from './CostPanel';
 import { ComponentEditor } from './ComponentEditor';
 import { FlowCanvas, type SelectionChange } from './FlowCanvas';
 import { findComponent, type CustomComponent } from '@/stores/libraryStore';
+import { cloudService } from '@/lib/cloudCatalog';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AnalystPanel } from '@/ai/AnalystPanel';
@@ -241,6 +242,11 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
     if (!editable) return toast(readOnly ? 'Fork this design to edit it.' : 'Stop the simulation to edit.', 'info');
     if (item === 'note') store().addAnnotation('text', position ?? { x: 0, y: -80 });
     else if (item === 'zone') store().addAnnotation('zone', position);
+    else if (item === 'stage') store().addAnnotation('stage', position);
+    else if (item.startsWith('cloud:')) {
+      const svc = cloudService(item.slice(6));
+      if (svc) store().addFromCloud(svc, position);
+    }
     else if (item.startsWith('lib:')) {
       const c = findComponent(item.slice(4));
       if (c) store().addFromLibrary(c, position);
@@ -454,6 +460,7 @@ export function Workspace({ readOnly = false, headerLeft, headerRight, onSave, f
               fitKey={fitKey}
               onSelectionChanges={applySelection}
               onDragStart={() => store().snapshot()}
+              onDragStop={(ids) => store().snapToStages(ids)}
               onMove={(p) => store().moveNodes(p)}
               onRemoveNodes={(ids) => store().removeNodes(ids)}
               onRemoveEdges={(ids) => store().removeEdges(ids)}

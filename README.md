@@ -22,6 +22,8 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 - **Draws like a diagram tool.** Link from any side of a component, drag a link's end to reconnect it, drag the + on a link to bend it, and choose curved, right-angled or straight lines with arrowheads at either end, both or none. Double-click a link to label it. Add text notes and resizable zones (a VPC, a region, a team), select several with Shift, and copy, paste and duplicate with ⌘C, ⌘V and ⌘D, all with undo. See [TrafficEdge.tsx](src/components/editor/TrafficEdge.tsx) and [edgePath.ts](src/lib/edgePath.ts).
 - **Lets you make your own components.** Name one (Kafka, Stripe, an LLM API), pick an icon and colour, and choose which built-in kind it **behaves like**, so the simulator knows how to run it. A starter library ships with event streams, object storage, search, auth, payments, email, an LLM API and an API gateway. See [libraryStore.ts](src/stores/libraryStore.ts).
 - **Never lets a drawing break the simulation.** Requests need a direction and can't loop, so a link that would loop, point into the clients or duplicate another becomes a dashed **drawing-only** link with a one-line reason, instead of being refused. The engine ignores drawing-only links, notes and zones everywhere, including the server re-run. See [graph.ts](src/core/graph.ts) and [decision 009](docs/decisions/009-drawing-only-links.md).
+- **Speaks AWS, Azure and Google Cloud.** 79 services, drawn with each provider's official architecture icon and full service name, each mapped to the behaviour the simulator should use (Lambda autoscales, Kinesis is a stream, Redshift is a warehouse). Stage columns (Ingestion, Data Lake, Computation, Data Warehouse, Presentation) centre the components you drop into them. Three data-platform templates, one per cloud, run healthy and grade A or B. See [cloudCatalog.ts](src/lib/cloudCatalog.ts) and [cloudTemplates.ts](src/lib/cloudTemplates.ts).
+- **Turns any design into a video you can post.** The film button renders a 16:9, 1:1 or 9:16 MP4 of the design assembling itself, with flowing dashed links, requests in flight, your title and the link, in the browser, with nothing uploaded. The preview is the exact frames that get encoded. See [src/export/](src/export/) and [decision 010](docs/decisions/010-video-export-in-the-browser.md).
 - **Lets you break things by hand.** Right-click a component to kill an instance, cause a full outage or degrade it; right-click a connection to add latency or partition it; set traffic from 0.5x to 10x. Every action lands in an incident log, and a list of active chaos lets you undo each one.
 - **Shows traffic as it really moves.** Particle density follows request rate, speed follows latency, and colour turns red where requests fail. Particles freeze when the simulation is paused. See [TrafficEdge.tsx L58-L60](src/components/editor/TrafficEdge.tsx#L58-L60).
 - **Reviews the design without guessing.** Graph analysis finds single points of failure, respecting the difference between load-balanced and fan-out calls. A 30-second headless run finds bottlenecks and idle spend. Other rules catch retries without a breaker, missing caches, synchronous third parties and queues with no consumer. Same design, same grade, every time. See [rules.ts](src/core/rules.ts).
@@ -36,8 +38,8 @@ The diagram is interactive and self-contained: open [architecture.html](docs/arc
 ```sh
 npm install
 npm run dev          # http://localhost:8080
-npm test             # 76 unit tests: engine, reviewer, scenarios, drawing rules, link geometry, AI fact sheet, store, edge-copy drift
-npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP, on desktop and phone (25 checks)
+npm test             # 96 unit tests: engine, reviewer, scenarios, drawing rules, link geometry, cloud catalog, video layout, AI fact sheet, store, edge-copy drift
+npm run smoke        # after `npm run build`: headless Chrome drives the real app under the production CSP, on desktop and phone, including rendering a video (29 checks)
 npm run check        # lint + types + tests + build + smoke, the same as CI
 ```
 
@@ -125,7 +127,9 @@ Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the project. The anon ke
 - leaderboard verified on the server
 - on-device AI analyst with three model sizes
 - draw.io-style editing: custom components, labels, bends, arrowheads, notes, zones, multi-select, copy/paste
-- 76 unit tests plus a 25-check browser smoke test (desktop and phone) on every push (GitHub Actions)
+- AWS, Azure and Google Cloud icons, stage columns, three cloud data-platform templates
+- video export (MP4, three aspect ratios), rendered in the browser
+- 96 unit tests plus a 29-check browser smoke test (desktop and phone) on every push (GitHub Actions)
 
 **Measured:** in [tests/](tests/) and on the live project.
 - **Determinism:** identical scores across runs, and between Node and Deno, for every template and scenario.
@@ -147,8 +151,9 @@ Directed and verified by me: the product, the scenarios and their difficulty, th
 
 - Canvas: [React Flow](https://reactflow.dev) (MIT). Charts: [Recharts](https://recharts.org) (MIT). Icons: [Lucide](https://lucide.dev) (ISC).
 - On-device inference: [WebLLM](https://github.com/mlc-ai/web-llm) (Apache-2.0). Models, downloaded by the visitor's browser and not redistributed here: Qwen 2.5 1.5B Instruct (Apache-2.0), Llama 3.2 1B Instruct (Llama 3.2 Community License), Phi-3.5 mini (MIT).
-- Backend: [Supabase](https://supabase.com). Diagram: [Archify](https://github.com/tt-a1i/archify) (MIT).
+- Backend: [Supabase](https://supabase.com). Diagram: [Archify](https://github.com/tt-a1i/archify) (MIT). Video encoding: [Mediabunny](https://mediabunny.dev) (MPL-2.0).
+- Cloud icons: AWS Architecture Icons, Azure architecture icons and Google Cloud icons, trademarks of their owners, used unmodified for architecture diagrams. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
 
-MIT, for the code in this repo. Use it freely for learning, interviews, or as a starting point. If it helped you, I'd love to hear about it.
+MIT, for the code in this repo. The cloud provider icons are not covered; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Use it freely for learning, interviews, or as a starting point. If it helped you, I'd love to hear about it.

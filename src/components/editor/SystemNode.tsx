@@ -4,6 +4,7 @@ import { Skull } from 'lucide-react';
 import { KIND_LABELS, resolveConfig, type DesignNode } from '@/core';
 import { fmtMs, fmtRps } from '@/lib/format';
 import { ICONS } from '@/lib/icons';
+import { cloudIconUrl } from '@/lib/cloudCatalog';
 import { COLORS, KIND_ICONS } from '@/lib/kinds';
 import { useLive } from '@/stores/simStore';
 
@@ -44,6 +45,7 @@ function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
   const pulse = useLive((s) => s.pulses[id]);
   const ref = useRef<HTMLDivElement>(null);
   const Icon = (node.appearance?.icon && ICONS[node.appearance.icon]) || KIND_ICONS[node.kind];
+  const cloudIcon = cloudIconUrl(node.appearance?.icon);
   const accent = node.appearance?.color ?? COLORS.ok;
   const typeName = node.appearance?.typeLabel ?? KIND_LABELS[node.kind];
 
@@ -97,7 +99,7 @@ function SystemNodeImpl({ id, data, selected }: NodeProps<SystemFlowNode>) {
           className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-line bg-bg"
           style={{ color: status === 'down' ? COLORS.bad : accent }}
         >
-          {status === 'down' ? <Skull size={15} /> : <Icon size={15} />}
+          {status === 'down' ? <Skull size={15} /> : cloudIcon ? <img src={cloudIcon} alt="" className="h-6 w-6" draggable={false} /> : <Icon size={15} />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] font-semibold leading-tight text-text">{node.label}</div>

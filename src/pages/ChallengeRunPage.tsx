@@ -16,7 +16,6 @@ import {
   KIND_LABELS,
   reviewDesign,
   SCENARIOS,
-  TEMPLATES,
   missingKinds,
   resolveScenarioAction,
   runScenario,
@@ -34,6 +33,7 @@ import { toast } from '@/stores/toastStore';
 import { FlowCanvas } from '@/components/editor/FlowCanvas';
 import { LiveStrip } from '@/components/sim/LiveStrip';
 import NotFound from './NotFound';
+import { ALL_TEMPLATES } from '@/lib/cloudTemplates';
 import { AnalystPanel } from '@/ai/AnalystPanel';
 import { buildAnalysisContext } from '@/ai/context';
 
@@ -74,7 +74,7 @@ function localChoices(): Choice[] {
   const list: Choice[] = [];
   const draft = readDraft();
   if (draft?.design.nodes.length) list.push({ key: 'draft', label: `${draft.title} (current draft)`, group: 'Draft', title: draft.title, design: draft.design });
-  for (const t of TEMPLATES) list.push({ key: `t:${t.id}`, label: t.title, group: 'Templates', title: t.title, design: t.design });
+  for (const t of ALL_TEMPLATES) list.push({ key: `t:${t.id}`, label: t.title, group: 'Templates', title: t.title, design: t.design });
   return list;
 }
 

@@ -13,6 +13,7 @@ import {
 } from '@/core';
 import { uid } from '@/lib/format';
 import type { CustomComponent } from '@/stores/libraryStore';
+import type { CloudService } from '@/lib/cloudCatalog';
 
 export type DesignSource = 'draft' | 'saved' | 'shared';
 
@@ -75,6 +76,9 @@ interface DesignState {
 
   addNode(kind: NodeKind, position?: Point, extra?: { label?: string; appearance?: NodeAppearance; config?: Partial<NodeConfig> }): string;
   addFromLibrary(c: CustomComponent, position?: Point): string;
+  addFromCloud(s: CloudService, position?: Point): string;
+  /** Centre components that were dropped inside a stage column. */
+  snapToStages(ids: string[]): void;
   updateNode(id: string, patch: Partial<Pick<DesignNode, 'label' | 'appearance'>>): void;
   updateNodeConfig(id: string, patch: Partial<NodeConfig>): void;
 
@@ -139,6 +143,11 @@ function selectionState(nodeIds: string[], edgeIds: string[]) {
 }
 
 const annotationsOf = (d: Design) => d.annotations ?? [];
+
+const STAGE_NAMES = ['Ingestion', 'Data Lake', 'Computation', 'Data Warehouse', 'Presentation', 'Stage'];
+const STAGE_COLORS = ['#10b981', '#3b82f6', '#f97316', '#a855f7', '#6366f1', '#06b6d4'];
+/** Approximate card width, for centring a component in a stage column. */
+const CARD_WIDTH = 176;
 
 /** Keep only selected ids that still exist (after undo/redo removes or restores items). */
 function prunedSelection(d: Design, nodeIds: string[], edgeIds: string[]) {
@@ -257,6 +266,35 @@ export const useDesign = create<DesignState>((set, get) => {
       });
     },
 
+    addFromCloud(s, position) {
+      return get().addNode(s.kind, position, {
+        label: s.short,
+        appearance: { typeLabel: s.name, icon: `cloud:${s.id}` },
+        config: s.config,
+      });
+    },
+
+    snapToStages(ids) {
+      const { design, saveVersion } = get();
+      const stages = annotationsOf(design).filter((a) => a.type === 'stage');
+      if (!stages.length) return;
+      const moved = new Set(ids);
+      let changed = false;
+      const nodes = design.nodes.map((n) => {
+        if (!moved.has(n.id) || !n.position) return n;
+        const cx = n.position.x + CARD_WIDTH / 2;
+        const cy = n.position.y;
+        const stage = stages.find((s) => cx >= s.position.x && cx <= s.position.x + s.width && cy >= s.position.y - 40 && cy <= s.position.y + s.height);
+        // Only single-file columns snap; a wide stage can hold components side by side.
+        if (!stage || stage.width > CARD_WIDTH * 2) return n;
+        const x = Math.round(stage.position.x + (stage.width - CARD_WIDTH) / 2);
+        if (x === n.position.x) return n;
+        changed = true;
+        return { ...n, position: { ...n.position, x } };
+      });
+      if (changed) set({ design: { ...design, nodes }, saveVersion: saveVersion + 1 });
+    },
+
     updateNode(id, patch) {
       const { design } = get();
       const structural = 'label' in patch; // labels appear in the incident log
@@ -275,11 +313,23 @@ export const useDesign = create<DesignState>((set, get) => {
 
     addAnnotation(type, position) {
       const { design } = get();
-      const id = uid(type === 'text' ? 'note-' : 'zone-');
+      const id = uid(type === 'text' ? 'note-' : type === 'zone' ? 'zone-' : 'stage-');
+      const stages = annotationsOf(design).filter((a) => a.type === 'stage');
       const annotation: Annotation =
         type === 'text'
           ? { id, type, position: position ?? { x: 0, y: 0 }, width: 220, height: 60, text: 'Double-click to edit', fontSize: 'md' }
-          : { id, type, position: position ?? { x: -40, y: 40 }, width: 520, height: 260, text: 'Zone', color: '#22d3ee' };
+          : type === 'zone'
+            ? { id, type, position: position ?? { x: -40, y: 40 }, width: 520, height: 260, text: 'Zone', color: '#22d3ee' }
+            : {
+                id,
+                type,
+                // New stages line up to the right of the last one.
+                position: position ?? (stages.length ? { x: Math.max(...stages.map((s) => s.position.x + s.width)) + 20, y: stages[0].position.y } : { x: -40, y: -60 }),
+                width: 260,
+                height: 620,
+                text: STAGE_NAMES[stages.length % STAGE_NAMES.length],
+                color: STAGE_COLORS[stages.length % STAGE_COLORS.length],
+              };
       commit({ ...design, annotations: [...annotationsOf(design), annotation] }, false);
       set(selectionState([id], []));
       return id;

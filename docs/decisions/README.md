@@ -13,3 +13,4 @@ Each file records one non-obvious choice: the context, the options, what was pic
 | [007](007-supabase-rls.md) | Supabase with row-level security over a custom backend |
 | [008](008-svg-particles.md) | SVG particles with bucketed props over a canvas renderer |
 | [009](009-drawing-only-links.md) | Drawing-only links over refusing what the simulator can't run |
+| [010](010-video-export-in-the-browser.md) | Rendering share videos in the browser over a server or screen recording |

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { GitFork, Pencil, Trophy } from 'lucide-react';
+import { Film, GitFork, Pencil, Trophy } from 'lucide-react';
 import { createDesign, getDesignBySlug, getProfileName, type DesignRow } from '@/lib/api';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from '@/stores/authStore';
@@ -9,6 +9,8 @@ import { toast } from '@/stores/toastStore';
 import { Brand, UserMenu } from '@/components/Layout';
 import { Workspace } from '@/components/editor/Workspace';
 import { EditorSkeleton } from '@/components/ui/Skeleton';
+
+const ExportVideoModal = lazy(() => import('@/export/ExportVideoModal'));
 
 export default function SharedPage() {
   const { slug } = useParams();
@@ -28,6 +30,7 @@ export default function SharedPage() {
           ? 'ready'
           : 'notfound';
   const [forking, setForking] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
 
   useEffect(() => {
     if (!slug || !isSupabaseConfigured) return;
@@ -75,6 +78,12 @@ export default function SharedPage() {
 
   const isOwner = user?.id === row.owner_id;
   return (
+    <>
+    {videoOpen && (
+      <Suspense fallback={null}>
+        <ExportVideoModal open={videoOpen} onClose={() => setVideoOpen(false)} design={row.graph} title={row.title} />
+      </Suspense>
+    )}
     <Workspace
       readOnly
       fitKey={row.id}
@@ -90,6 +99,9 @@ export default function SharedPage() {
       }
       headerRight={
         <>
+          <button className="btn-icon" onClick={() => setVideoOpen(true)} aria-label="Export video" title="Export as video (MP4)">
+            <Film size={15} />
+          </button>
           <Link to="/challenges" className="btn hidden sm:inline-flex">
             <Trophy size={14} /> Challenges
           </Link>
@@ -108,5 +120,6 @@ export default function SharedPage() {
         </>
       }
     />
+    </>
   );
 }

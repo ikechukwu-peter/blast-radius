@@ -147,6 +147,34 @@ try {
   const d = await draft();
   check(d.nodes.some((n) => n.kind === 'queue' && n.appearance?.typeLabel === 'Event stream') && d.annotations?.length === 1, 'drawing: custom components keep their behaviour; notes are saved');
 
+  // Cloud poster: official icons, stage columns, and the video export.
+  await page.click('[aria-label="New from template"]');
+  await wait(400);
+  check(await click('AWS Data Platform'), 'cloud: the AWS data platform template is offered');
+  await wait(1200);
+  const cloud = await page.evaluate(() => ({
+    icons: document.querySelectorAll('.react-flow__node img[src^="/cloud/aws/"]').length,
+    stages: document.querySelectorAll('.react-flow__node-stage').length,
+  }));
+  check(cloud.icons >= 12 && cloud.stages === 5, `cloud: official icons in five stage columns (${cloud.icons} icons, ${cloud.stages} stages)`);
+  await page.click('[aria-label="Export video"]');
+  await page.waitForSelector('canvas[aria-label="Video preview"]', { timeout: 15000 });
+  await wait(1500);
+  check(await page.evaluate(() => {
+    const c = document.querySelector('canvas[aria-label="Video preview"]');
+    const px = c.getContext('2d').getImageData(c.width / 2 - 200, c.height / 2 - 200, 400, 400).data;
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] + px[i + 1] + px[i + 2] > 200) lit++;
+    return c.width === 1920 && lit > 500;
+  }), 'video: the preview draws the diagram at 1920x1080');
+  await click('8s');
+  await wait(300);
+  await click('Render video');
+  const video = await page.waitForSelector('a[download]', { timeout: 120000 }).then((a) => a.evaluate((x) => x.download)).catch(() => null);
+  check(/\.(mp4|webm)$/.test(video ?? ''), `video: renders a downloadable file in the browser (${video})`);
+  await page.keyboard.press('Escape');
+  await wait(300);
+
   // Challenge
   await page.goto(`${BASE}/challenges/slow-provider`, { waitUntil: 'networkidle0' });
   await page.select('select', 't:event-driven');

@@ -55,7 +55,7 @@ Every system design conversation ends at a whiteboard diagram, and diagrams don'
 | Diagram | Archify | Interactive, validated architecture diagram from a JSON source |
 | Hosting | Vercel, custom subdomain | Static build, security headers, preview deploys |
 
-## 4. Nine decisions worth defending
+## 4. Ten decisions worth defending
 
 Each one has its own record in [decisions/](decisions/README.md).
 
@@ -68,6 +68,7 @@ Each one has its own record in [decisions/](decisions/README.md).
 7. **Authorization in the database** ([007](decisions/007-supabase-rls.md)). Policies next to the data, then attacked from a real session.
 8. **SVG particles, bucketed** ([008](decisions/008-svg-particles.md)). Smooth motion at a 10 Hz data rate without a second renderer.
 9. **Never refuse a line** ([009](decisions/009-drawing-only-links.md)). Links the simulator can't run become drawing-only, so it draws like a diagram tool and still simulates correctly.
+10. **Videos rendered in the browser** ([010](decisions/010-video-export-in-the-browser.md)). A canvas renderer plus WebCodecs makes a postable MP4 faster than real time, with no server and no upload. The preview and the encoder draw the same frames.
 
 ## 5. Measurements, not assumptions
 
@@ -107,6 +108,9 @@ What the engine reproduces, each as a test:
 - **A double-click that never reached the link.** *Found by a browser test, then by tracing events.* Once a link was selected, its "add a bend" handle sat exactly at the midpoint, so the second click of a double-click landed on the handle and added a bend instead of opening the label editor. *Fix:* a "+" only becomes a bend after a 4px drag, and double-clicking it edits the label, as in draw.io. Tracing the events also showed the test tool's double-click had never fired a real `dblclick` at all, so the test was fixed too.
 - **Selection that outlived undo.** *Found by the same walkthrough.* Duplicating everything and then undoing left "13 items selected", all of them gone. *Fix:* undo and redo prune the selection to ids that still exist, with a test.
 - **Effects that set state.** *Found by the React Hooks v7 lint rules.* Nine effects synchronously set state, causing extra renders and, in the canvas, two copies of the node list that could disagree. *Fix:* derive in render, key fetched data by what it was fetched for, and make the design store the canvas's only source of truth.
+- **A video the site's own security policy wouldn't play.** *Found by the browser test, which fails on any console error.* The rendered MP4 was fine, but its preview was blocked: the CSP had no `media-src`, so `blob:` video fell back to `default-src 'self'`. *Fix:* `media-src 'self' blob:`, and the smoke test now renders a video under the production headers.
+- **Cloud templates that graded F.** *Found by running them.* With default settings, a stream fanned its full rate into every consumer and single-replica functions dropped most of it, so the "reference" platforms failed their own review. *Fix:* each catalog service carries managed-service defaults (functions autoscale and have breakers, streams have replicas), and a test requires each template to run with under 1% errors and grade A or B.
+- **Cards that overlapped on a phone.** *Found from a phone screenshot.* Template rows were 150 units apart, enough for 64-unit-tall cards in rows but not for 176-unit-wide cards once the phone view turns the diagram on its side. *Fix:* rows a card's width apart, and stage names sit on the band's edge in the vertical view.
 - **A Vercel CLI step rewrote `.env.local`** while linking the project, in the file that held the database password. *Found by checking the file straight after.* The password was intact; the lesson was to check, not assume.
 
 ## 7. What is deliberately not built

@@ -21,11 +21,11 @@ import { isSplitKind, type Design, type DesignEdge } from '@/core';
 import { COLORS } from '@/lib/kinds';
 import { ViewTransformContext, makeViewTransform, prefersVertical } from '@/lib/viewTransform';
 import { useLive } from '@/stores/simStore';
-import { TextNode, ZoneNode, type AnnotationFlowNode } from './AnnotationNodes';
+import { StageNode, TextNode, ZoneNode, type AnnotationFlowNode } from './AnnotationNodes';
 import { SystemNode, type SystemFlowNode } from './SystemNode';
 import { TrafficEdge, type TrafficFlowEdge } from './TrafficEdge';
 
-const nodeTypes = { system: SystemNode, text: TextNode, zone: ZoneNode };
+const nodeTypes = { system: SystemNode, text: TextNode, zone: ZoneNode, stage: StageNode };
 const edgeTypes = { traffic: TrafficEdge };
 
 export const DRAG_MIME = 'application/x-blast-radius-kind';
@@ -55,6 +55,7 @@ export interface FlowCanvasProps {
   onSelectionChanges?: (nodes: SelectionChange[], edges: SelectionChange[]) => void;
   onMove?: (positions: Record<string, Point>) => void;
   onDragStart?: () => void;
+  onDragStop?: (ids: string[]) => void;
   onRemoveNodes?: (ids: string[]) => void;
   onRemoveEdges?: (ids: string[]) => void;
   onConnect?: (source: string, target: string, handles: { sourceHandle?: string | null; targetHandle?: string | null }) => void;
@@ -113,13 +114,13 @@ function Inner(props: FlowCanvasProps) {
         position: vt.toView(a.position),
         width: size.width,
         height: size.height,
-        zIndex: a.type === 'zone' ? -1 : 0,
+        zIndex: a.type === 'text' ? 0 : -1,
         selected: selectedNodes.has(a.id),
         draggable: editable,
         connectable: editable,
         data: { annotation: a, editable },
       };
-      (a.type === 'zone' ? zones : texts).push(n);
+      (a.type === 'text' ? texts : zones).push(n);
     }
     const systems: SystemFlowNode[] = design.nodes.map((dn) => ({
       id: dn.id,
@@ -249,6 +250,7 @@ function Inner(props: FlowCanvasProps) {
         edgesReconnectable={editable}
         onReconnect={(old, c) => props.onReconnect?.(old.id, { ...c, sourceHandle: vt.handle(c.sourceHandle) ?? null, targetHandle: vt.handle(c.targetHandle) ?? null })}
         onNodeDragStart={() => props.onDragStart?.()}
+        onNodeDragStop={(_, __, dragged) => props.onDragStop?.(dragged.map((n) => n.id))}
         onEdgeDoubleClick={(_, edge) => editable && props.onEdgeDoubleClick?.(edge.id)}
         onNodeClick={(e, n) => props.onNodeTap?.(n.id, e.clientX, e.clientY)}
         onEdgeClick={(e, edge) => props.onEdgeTap?.(edge.id, e.clientX, e.clientY)}

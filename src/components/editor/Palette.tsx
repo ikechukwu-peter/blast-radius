@@ -1,13 +1,16 @@
 import { useState, type ReactNode } from 'react';
-import { Pencil, Plus, Search, Square, StickyNote, Trash2 } from 'lucide-react';
+import { Columns3, Pencil, Plus, Search, Square, StickyNote, Trash2 } from 'lucide-react';
 import { KIND_LABELS } from '@/core';
 import { ICONS } from '@/lib/icons';
 import { KIND_BLURBS, KIND_ICONS, PALETTE_ORDER } from '@/lib/kinds';
 import { STARTER_LIBRARY, useLibrary, type CustomComponent } from '@/stores/libraryStore';
+import { CLOUD_SERVICES, PROVIDER_LABEL, cloudIconUrl, type CloudProvider } from '@/lib/cloudCatalog';
 import { DRAG_MIME } from './FlowCanvas';
 
 interface Item {
   key: string;
+  /** Extra words to match when searching. */
+  search?: string;
   title: string;
   subtitle: string;
   icon: ReactNode;
@@ -75,8 +78,9 @@ export function Palette({
   const mine = useLibrary((s) => s.mine);
   const remove = useLibrary((s) => s.remove);
   const [query, setQuery] = useState('');
+  const [provider, setProvider] = useState<CloudProvider>('aws');
   const q = query.trim().toLowerCase();
-  const match = (i: Item) => !q || `${i.title} ${i.subtitle}`.toLowerCase().includes(q);
+  const match = (i: Item) => !q || `${i.title} ${i.subtitle} ${i.search ?? ''}`.toLowerCase().includes(q);
 
   const builtIns: Item[] = PALETTE_ORDER.map((kind) => {
     const Icon = KIND_ICONS[kind];
@@ -89,9 +93,17 @@ export function Palette({
   const drawing: Item[] = [
     { key: 'note', title: 'Text note', subtitle: 'A label anywhere on the canvas', icon: <StickyNote size={15} className="text-muted" /> },
     { key: 'zone', title: 'Zone', subtitle: 'Group components: VPC, region, team', icon: <Square size={15} className="text-muted" /> },
+    { key: 'stage', title: 'Stage column', subtitle: 'Ingestion → Data Lake → … ; components snap in', icon: <Columns3 size={15} className="text-muted" /> },
   ];
+  const cloud: Item[] = CLOUD_SERVICES.filter((s) => (q ? true : s.provider === provider)).map((s) => ({
+    key: `cloud:${s.id}`,
+    title: s.short,
+    subtitle: `${s.name} · ${KIND_LABELS[s.kind]}`,
+    icon: <img src={cloudIconUrl(`cloud:${s.id}`)} alt="" className="h-5 w-5" draggable={false} />,
+    search: `${s.name} ${s.short} ${s.tags ?? ''} ${PROVIDER_LABEL[s.provider]}`,
+  }));
 
-  const shown = { builtIns: builtIns.filter(match), library: library.filter(match), drawing: drawing.filter(match) };
+  const shown = { builtIns: builtIns.filter(match), library: library.filter(match), drawing: drawing.filter(match), cloud: cloud.filter(match) };
 
   return (
     <div className="space-y-1">
@@ -128,6 +140,28 @@ export function Palette({
           />
         ))}
       </Section>
+      {(shown.cloud.length > 0 || !q) && (
+        <Section title="Cloud" compact={compact}>
+          {!q && (
+            <div className={`flex gap-1 ${compact ? 'col-span-3' : ''}`} role="tablist" aria-label="Cloud provider">
+              {(Object.keys(PROVIDER_LABEL) as CloudProvider[]).map((p) => (
+                <button
+                  key={p}
+                  role="tab"
+                  aria-selected={provider === p}
+                  onClick={() => setProvider(p)}
+                  className={`flex-1 rounded-md border px-1.5 py-1 text-[11px] font-medium ${provider === p ? 'border-ok/60 bg-ok/10 text-ok' : 'border-line text-muted hover:text-text'}`}
+                >
+                  {PROVIDER_LABEL[p]}
+                </button>
+              ))}
+            </div>
+          )}
+          {shown.cloud.map((i) => (
+            <Tile key={i.key} item={i} compact={compact} onAdd={onAdd} />
+          ))}
+        </Section>
+      )}
       {shown.drawing.length > 0 && (
         <Section title="Drawing" compact={compact}>
           {shown.drawing.map((i) => (
